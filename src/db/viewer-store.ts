@@ -105,11 +105,18 @@ export class ViewerStore {
 
   // ── Viewer / settings ─────────────────────────────────────────────────────
 
-  async touchViewer(username: string, at: number): Promise<ViewerMeta> {
-    UsernameSchema.parse(username);
+  /** Record that this account is active. `username` may be unknown until its profile is seen. */
+  async touchViewer(username: string | undefined, at: number): Promise<ViewerMeta> {
+    if (username !== undefined) UsernameSchema.parse(username);
+    const ts = TimestampSchema.parse(at);
     return this.db.transaction('rw', this.db.viewers, async () => {
       const existing = await this.db.viewers.get(this.viewerId);
-      const meta: ViewerMeta = { ...existing, viewerId: this.viewerId, username, lastActiveAt: at };
+      const meta: ViewerMeta = {
+        ...existing,
+        viewerId: this.viewerId,
+        username: username ?? existing?.username ?? '',
+        lastActiveAt: Math.max(existing?.lastActiveAt ?? 0, ts),
+      };
       await this.db.viewers.put(meta);
       return meta;
     });
@@ -593,6 +600,20 @@ export class ViewerStore {
         await this.db.nodes.put(next);
       }
       return { completed: true, markedStale: toStale.length };
+    });
+  }
+
+  /**
+   * A direct signal that `from → to` does not exist right now (e.g. a profile's "Follow" button
+   * state). Marks a known edge stale unless it was confirmed at/after `at`.
+   */
+  async confirmNoEdge(from: string, to: string, at: number): Promise<boolean> {
+    const ts = TimestampSchema.parse(at);
+    return this.db.transaction('rw', this.db.edges, async () => {
+      const e = await this.getEdge(from, to);
+      if (!e || e.stale || e.lastConfirmedAt >= ts) return false;
+      await this.db.edges.put({ ...e, stale: true, staleAt: ts });
+      return true;
     });
   }
 

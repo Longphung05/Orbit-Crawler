@@ -3,8 +3,7 @@
 LinkedIn-style 1st / 2nd / 3rd-degree connections for Instagram, as a Chrome MV3 extension.
 Passive and local-only: Orbit never contacts Instagram by itself. See `CLAUDE.md` for the full spec.
 
-> Status: **Phase 4 of 8**. Graph engine, local database, and export import are built.
-> Nothing runs on instagram.com yet (passive capture is Phase 5, the profile badge Phase 6).
+> Status: **Phase 5 of 8**. Passive capture works on instagram.com; the profile badge is Phase 6.
 
 ## Develop
 
@@ -46,6 +45,21 @@ It never prints usernames, writes nothing, and makes no network requests.
 Side panel → **Import your Instagram export** → choose the `.zip` (or unzipped folder). You can
 review the result straight away; saving it needs Orbit to know which Instagram account is yours,
 which it detects when you open instagram.com while logged in (Phase 5).
+
+## Try it on Instagram
+
+1. `npm run build`, then in `chrome://extensions` click **Reload** on Orbit (or Load unpacked
+   `.output/chrome-mv3` the first time). Reload any open instagram.com tabs.
+2. Browse normally while logged in: open your own profile once, then a few profiles and their
+   Followers / Following lists. Scroll a short list to the end to see it marked complete.
+3. The toolbar popup shows accounts/connections growing and a health dot:
+   grey = nothing seen yet, green = capturing, amber/red = some response types not understood.
+4. Side panel → **Capture status** lists each response type. If anything is red, click
+   **Copy diagnostics** and share it: it holds endpoint patterns, counts and data *shapes*
+   only, never usernames or ids.
+
+Orbit only reads responses the page already received. It never opens pages, scrolls, or sends
+requests, so what it learns grows only as fast as you browse.
 
 ### Troubleshooting
 

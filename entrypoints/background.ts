@@ -1,7 +1,19 @@
+import { CaptureCoordinator } from '../src/capture/coordinator';
+import { getDb } from '../src/db/db';
+
+// Service worker: storage writes and message routing. It never makes network requests to
+// Instagram (CLAUDE.md §2); it only processes what content scripts saw the page receive.
 export default defineBackground(() => {
-  // Phase 1: no-op service worker. Storage writes and message routing arrive in Phase 3/5.
-  // This worker must never make network requests to Instagram (CLAUDE.md §2).
-  browser.runtime.onInstalled.addListener(({ reason }) => {
-    console.info(`[orbit] installed (${reason})`);
+  const coordinator = new CaptureCoordinator(getDb());
+
+  browser.runtime.onMessage.addListener((msg, sender) => {
+    void coordinator.handle(msg, {
+      tabId: sender.tab?.id,
+      url: sender.url,
+      fromSelf: sender.id === browser.runtime.id,
+    });
+    return undefined; // no reply
   });
+
+  browser.tabs.onRemoved.addListener((tabId) => coordinator.forgetTab(tabId));
 });

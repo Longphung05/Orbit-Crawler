@@ -26,6 +26,7 @@ export type FileKind =
   | 'legacy_connections'
   | 'personal_information'
   | 'html'
+  | 'known_unused'
   | 'unknown';
 
 export interface FileReport {
@@ -81,6 +82,14 @@ const OTHER_FILES: Record<string, OtherKind> = {
   'hide_story_from.json': 'hide_story_from',
 };
 
+/** Seen in real exports; not relationship data Orbit needs, so not even parsed. */
+const KNOWN_UNUSED = new Set([
+  'following_hashtags.json',
+  "profiles_you've_favorited.json",
+  'recent_follow_requests.json',
+  'custom_lists.json',
+]);
+
 function basename(path: string): string {
   return (path.split('/').pop() ?? path).toLowerCase();
 }
@@ -95,6 +104,7 @@ export function classify(path: string): { kind: FileKind; part?: number } {
   }
   const other = OTHER_FILES[name];
   if (other) return { kind: other };
+  if (KNOWN_UNUSED.has(name)) return { kind: 'known_unused' };
   if (name === 'connections.json') return { kind: 'legacy_connections' };
   if (name === 'personal_information.json') return { kind: 'personal_information' };
   return { kind: 'unknown' };
@@ -176,6 +186,16 @@ export function dateFromName(name: string | undefined, now: number): number | un
   return Number.isNaN(t) || !plausible ? undefined : t;
 }
 
+function relationshipArray(json: unknown, preferredKey: string): unknown {
+  if (Array.isArray(json) || json === null || typeof json !== 'object') return json;
+  const obj = json as Record<string, unknown>;
+  if (preferredKey in obj) return obj[preferredKey];
+  const arrays = Object.entries(obj).filter(
+    ([k, v]) => k.startsWith('relationships_') && Array.isArray(v),
+  );
+  return arrays.length === 1 ? arrays[0]?.[1] : json;
+}
+
 interface ListAccumulator {
   parts: Map<number, string[]>;
   failedParts: number;
@@ -210,6 +230,10 @@ export function parseExport(files: readonly ExportFile[], opts: ParseOptions): P
     }
     if (kind === 'unknown') {
       report({ status: 'unrecognized', message: 'not a file Orbit knows; skipped' });
+      continue;
+    }
+    if (kind === 'known_unused') {
+      report({ status: 'ignored', message: 'not used by Orbit' });
       continue;
     }
     if (file.text.length > MAX_TEXT_CHARS) {
@@ -285,13 +309,21 @@ export function parseExport(files: readonly ExportFile[], opts: ParseOptions): P
       continue;
     }
 
-    // Other known relationship files.
-    const wrapperKey = OTHER_RELATIONSHIP_KEYS[kind];
-    const container = json as Record<string, unknown> | null;
-    const raw = container && typeof container === 'object' ? container[wrapperKey] : undefined;
-    const res = RelationshipEntrySchema.array().safeParse(raw ?? json);
+    // Other known relationship files. The wrapper key varies between export versions, so take
+    // the expected key, else any single `relationships_*` array, else a bare array.
+    const res = RelationshipEntrySchema.array().safeParse(
+      relationshipArray(json, OTHER_RELATIONSHIP_KEYS[kind]),
+    );
     if (!res.success) {
-      report({ status: 'failed', message: `unexpected shape (${zodSummary(res.error)})` });
+      if (kind === 'pending_follow_requests') {
+        report({ status: 'failed', message: `unexpected shape (${zodSummary(res.error)})` });
+        warnings.push(
+          "Couldn't read pending follow requests; any that are pending may be counted as follows.",
+        );
+      } else {
+        // Not used by Orbit: an unexpected shape here is harmless, so don't alarm anyone.
+        report({ status: 'ignored', message: 'not used by Orbit' });
+      }
       continue;
     }
     const ex = extract(res.data);

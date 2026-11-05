@@ -1,4 +1,4 @@
-export { OrbitDB, getDb, SCHEMA_VERSION, type SettingsRecord } from './db';
+export { OrbitDB, getDb, SCHEMA_VERSION, type DiagnosticRecord, type SettingsRecord } from './db';
 export {
   ViewerStore,
   edgeId,

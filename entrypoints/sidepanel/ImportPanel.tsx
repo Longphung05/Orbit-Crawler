@@ -273,7 +273,11 @@ function Review({
           class="rounded bg-indigo-600 px-3 py-1.5 text-white disabled:opacity-40"
           onClick={onCommit}
         >
-          {viewer ? `Import into @${viewer.username}` : 'Import'}
+          {viewer?.username
+            ? `Import into @${viewer.username}`
+            : viewer
+              ? 'Import into your account'
+              : 'Import'}
         </button>
         <button
           type="button"

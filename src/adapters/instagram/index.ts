@@ -1,3 +1,24 @@
-// All Instagram-specific URL matchers, zod schemas, and DOM selectors live here (§6.2, §12).
-// Implemented in Phase 5.
-export const ADAPTER_VERSION = '0.0.0';
+// All Instagram-specific URL matchers, zod schemas, and page patterns live here (§6.2, §12).
+export { ADAPTER_VERSION, ORBIT_CHANNEL } from './constants';
+export {
+  CONTENT_MATCHES,
+  GRAPHQL_PROFILE_HINT,
+  isCandidateUrl,
+  isInstagramUrl,
+  matchUrl,
+  pathTemplate,
+  wantsBody,
+  type ListKind,
+  type PayloadType,
+  type UrlMatch,
+} from './urls';
+export {
+  interpretResponse,
+  type AdapterOutcome,
+  type CaptureEvent,
+  type Friendship,
+  type MutualHint,
+  type ObservedResponse,
+} from './interpret';
+export { detectViewer, type ViewerDetection } from './viewer';
+export { skeleton, type Skeleton } from './skeleton';

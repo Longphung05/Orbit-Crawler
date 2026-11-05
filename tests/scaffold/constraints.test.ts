@@ -12,7 +12,7 @@ const SCANNED_DIRS = ['src', 'entrypoints'];
  * Files allowed to reference network primitives. Phase 5's MAIN-world observer must *wrap*
  * fetch/XHR read-only; it is the only exception and gets its own dedicated tests.
  */
-const NETWORK_ALLOWLIST = new Set<string>(['entrypoints/instagram-main.ts']);
+const NETWORK_ALLOWLIST = new Set<string>(['src/capture/main-world-observer.ts']);
 
 const FORBIDDEN_NETWORK = [
   /\bfetch\s*\(/,

@@ -1,6 +1,7 @@
 import { liveQuery } from 'dexie';
 import { useEffect, useState } from 'preact/hooks';
 import { getDb } from '../db/db';
+import type { DiagnosticRecord } from '../db/db';
 import type { ViewerMeta } from '../shared/types';
 
 /** Subscribe to a Dexie query; re-runs when the tables it reads change (in any extension page). */
@@ -39,4 +40,9 @@ export function useViewerCounts(viewerId: string | undefined): Counts | undefine
     ]);
     return { nodes, edges };
   }, [viewerId]);
+}
+
+/** Adapter diagnostics records (global, not per viewer). */
+export function useDiagnostics(): DiagnosticRecord[] | undefined {
+  return useLive(() => getDb().diagnostics.toArray(), []);
 }

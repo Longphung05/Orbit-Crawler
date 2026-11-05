@@ -1,4 +1,5 @@
-import { useActiveViewer, useViewerCounts } from '../../src/ui/hooks';
+import { HealthDot, viewerLine } from '../../src/ui/health';
+import { useActiveViewer, useDiagnostics, useViewerCounts } from '../../src/ui/hooks';
 
 async function openSidePanel(): Promise<void> {
   const win = await browser.windows.getCurrent();
@@ -9,16 +10,12 @@ async function openSidePanel(): Promise<void> {
 export function App() {
   const viewer = useActiveViewer();
   const counts = useViewerCounts(viewer?.viewerId);
+  const diagnostics = useDiagnostics();
   return (
     <main class="w-72 space-y-3 p-4 font-sans text-sm text-slate-800">
       <header class="flex items-center justify-between">
         <h1 class="text-base font-semibold">Orbit</h1>
-        <span
-          class="flex items-center gap-1 text-xs text-slate-500"
-          title="Capture adapter arrives in Phase 5"
-        >
-          <span class="inline-block h-2 w-2 rounded-full bg-slate-300" /> adapter inactive
-        </span>
+        <HealthDot records={diagnostics} />
       </header>
       <dl class="grid grid-cols-2 gap-2">
         <div class="rounded bg-slate-100 p-2">
@@ -30,9 +27,7 @@ export function App() {
           <dd class="text-lg font-semibold">{counts?.edges.toLocaleString() ?? '…'}</dd>
         </div>
       </dl>
-      <p class="text-xs text-slate-500">
-        {viewer ? `Logged in as @${viewer.username}` : 'No account detected yet.'}
-      </p>
+      <p class="text-xs text-slate-500">{viewerLine(viewer)}</p>
       <button
         type="button"
         class="w-full rounded bg-indigo-600 px-3 py-2 font-medium text-white hover:bg-indigo-700"

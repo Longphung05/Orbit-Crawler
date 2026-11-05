@@ -123,4 +123,15 @@ describe('viewer meta', () => {
       importedExportAt: 7,
     });
   });
+
+  it('touchViewer without a username keeps the known one; activity never goes backwards', async () => {
+    const s = store();
+    await s.touchViewer('fake_me', 50);
+    expect(await s.touchViewer(undefined, 40)).toMatchObject({
+      username: 'fake_me',
+      lastActiveAt: 50,
+    });
+    expect((await store('2000').touchViewer(undefined, 1)).username).toBe('');
+    await expect(s.touchViewer('bad name!', 60)).rejects.toThrow();
+  });
 });

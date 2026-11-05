@@ -159,6 +159,44 @@ describe('unusable exports', () => {
     expect(p.errors.length).toBe(1);
   });
 
+  it('real-export regression: other files under unexpected wrapper keys are ignored, not failed', () => {
+    const p = parseExport(
+      [
+        ...fixtureFiles('modern'),
+        { path: 'x/close_friends.json', text: '{"relationships_close_friends_v2": [] }' },
+        { path: 'x/blocked_profiles.json', text: '{"something_else": {"a": 1}}' },
+        { path: 'x/following_hashtags.json', text: '{"relationships_following_hashtags": []}' },
+        { path: "x/profiles_you've_favorited.json", text: '{}' },
+        { path: 'x/recent_follow_requests.json', text: '{}' },
+        { path: 'x/custom_lists.json', text: '{}' },
+      ],
+      { now: NOW },
+    );
+    const extra = p.files.filter((f) => f.path.startsWith('x/'));
+    expect(extra.every((f) => f.status === 'ignored')).toBe(true);
+    expect(p.errors).toEqual([]);
+  });
+
+  it('pending requests under a renamed wrapper key are still found', () => {
+    const files = fixtureFiles('modern').map((f) =>
+      f.path.endsWith('pending_follow_requests.json')
+        ? {
+            ...f,
+            text: f.text.replace('relationships_follow_requests_sent', 'relationships_requests_v2'),
+          }
+        : f,
+    );
+    expect(parseExport(files, { now: NOW }).pendingFollowRequests).toEqual(['fake_pending']);
+  });
+
+  it('unreadable pending requests are a warning (they could inflate following)', () => {
+    const files = fixtureFiles('modern').map((f) =>
+      f.path.endsWith('pending_follow_requests.json') ? { ...f, text: '{"a": 1, "b": 2}' } : f,
+    );
+    const p = parseExport(files, { now: NOW });
+    expect(p.warnings.some((w) => w.includes('pending follow requests'))).toBe(true);
+  });
+
   it('survives hostile values without throwing', () => {
     const weird = [
       { path: 'x/followers_1.json', text: '[null, 5, {"string_list_data": "nope"}]' },

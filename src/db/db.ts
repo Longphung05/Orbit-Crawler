@@ -15,7 +15,7 @@ interface NodeV1 {
   followersCoverage?: UserNode['followersCoverage'];
 }
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 /**
  * Schema history. Never edit a shipped version: add a new one with an upgrade().
@@ -32,6 +32,30 @@ export const SCHEMA_V2 = {
   settings: 'viewerId',
 } as const;
 
+/** v3: adapter health / diagnostics (global, not per viewer: it describes Instagram, not you). */
+export const SCHEMA_V3 = {
+  diagnostics: 'key',
+} as const;
+
+/**
+ * Per payload type (or 'viewer', or 'unmatched:<endpoint>') capture health. Contains endpoint
+ * templates and value-free shapes only, never user data.
+ */
+export interface DiagnosticRecord {
+  key: string;
+  adapterVersion: string;
+  ok: number;
+  failed: number;
+  lastOkAt?: number;
+  lastFailAt?: number;
+  lastError?: string;
+  endpoint?: string;
+  /** Value-free structure of the last payload that failed validation. */
+  lastShape?: unknown;
+  /** For 'viewer': which detection strategy last matched. */
+  detail?: string;
+}
+
 export function historyKey(viewerId: string, usernameKey: string): string {
   return `${viewerId}|${usernameKey}`;
 }
@@ -41,6 +65,7 @@ export class OrbitDB extends Dexie {
   edges!: Table<Edge, [string, string]>;
   viewers!: Table<ViewerMeta, string>;
   settings!: Table<SettingsRecord, string>;
+  diagnostics!: Table<DiagnosticRecord, string>;
 
   constructor(name = 'orbit') {
     super(name);
@@ -65,6 +90,7 @@ export class OrbitDB extends Dexie {
             if (n.id.startsWith(PLACEHOLDER_PREFIX)) n.isPlaceholder = true;
           });
       });
+    this.version(3).stores(SCHEMA_V3);
   }
 }
 

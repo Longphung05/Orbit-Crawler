@@ -8,3 +8,4 @@ stats.html
 # Never commit real Instagram exports or captures
 /exports/
 *.instagram-export*
+testoutput.txt
