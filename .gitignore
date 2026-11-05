@@ -1,0 +1,10 @@
+CLAUDE.md
+node_modules/
+.output/
+.wxt/
+stats.html
+*.zip
+.env*
+# Never commit real Instagram exports or captures
+/exports/
+*.instagram-export*
