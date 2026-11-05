@@ -25,5 +25,10 @@ export default tseslint.config(
       'no-restricted-globals': ['error', 'window', 'document', 'chrome', 'browser', 'indexedDB'],
     },
   },
+  {
+    // Typed-array indexing in the CSR hot loops is bounds-safe by construction; tests index fixtures.
+    files: ['src/graph/**/*.ts', 'tests/**/*.ts'],
+    rules: { '@typescript-eslint/no-non-null-assertion': 'off' },
+  },
   prettier,
 );
