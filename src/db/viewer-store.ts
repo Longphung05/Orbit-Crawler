@@ -61,7 +61,11 @@ export interface ListPageResult {
 
 export interface CompleteListInput {
   ownerId: string;
-  direction: 'following' | 'followers';
+  /**
+   * `mutuals`: the "Followed by…" list of accounts the viewer follows that follow the owner.
+   * Completing it can only stale edges from current 1st-degree accounts, and sets no coverage.
+   */
+  direction: ListDirection;
   /** Edges in scope not confirmed since this time are marked stale. */
   sessionStartedAt: number;
   completedAt: number;
@@ -72,9 +76,21 @@ export interface CompleteListResult {
   markedStale: number;
 }
 
+export interface ExportSnapshotResult {
+  /** Edges newly created. */
+  added: number;
+  /** Previously known edges the export showed are gone. */
+  markedStale: number;
+  /** Accounts known only by username until passive capture sees their id. */
+  placeholders: number;
+}
+
 export interface ExportSnapshotInput {
-  following: string[];
-  followers: string[];
+  /** Omit a list the export didn't contain: it is then neither applied nor marked complete. */
+  following?: string[];
+  followers?: string[];
+  /** Lists present but incomplete (missing/unreadable parts): applied, never used for stale. */
+  partial?: ('following' | 'followers')[];
   /** When Instagram generated the export; the cutoff for stale marking. */
   exportedAt: number;
 }
@@ -177,16 +193,25 @@ export class ViewerStore {
 
   // ── Node upserts + placeholder merging ────────────────────────────────────
 
-  /** Insert or update observed accounts. Merges export placeholders on first id sighting. */
-  async upsertNodes(observations: readonly NodeObservation[], observedAt: number): Promise<void> {
+  /**
+   * Insert or update observed accounts. Merges export placeholders on first id sighting.
+   * `fromProfileView`: the human opened this account's own profile page, which is the only
+   * signal strong enough to clear an `unavailable` flag. Rows in other people's lists are not.
+   */
+  async upsertNodes(
+    observations: readonly NodeObservation[],
+    observedAt: number,
+    opts: { fromProfileView?: boolean } = {},
+  ): Promise<void> {
     const at = TimestampSchema.parse(observedAt);
     const rows = z.array(NodeObservationSchema).parse(observations);
+    const fromProfileView = opts.fromProfileView === true;
     await this.db.transaction('rw', this.db.nodes, this.db.edges, async () => {
-      for (const o of rows) await this.upsertOne(o, at);
+      for (const o of rows) await this.upsertOne(o, at, fromProfileView);
     });
   }
 
-  private async upsertOne(o: NodeObservation, at: number): Promise<void> {
+  private async upsertOne(o: NodeObservation, at: number, fromProfileView: boolean): Promise<void> {
     const v = this.viewerId;
     const key = o.username.toLowerCase();
     const existing = await this.db.nodes.get([v, o.id]);
@@ -246,11 +271,11 @@ export class ViewerStore {
       ] as const) {
         if (o[k] !== undefined) (node[k] as unknown) = o[k];
       }
-      // Seeing a profile again means it's reachable again.
-      if (node.unavailable) {
-        delete node.unavailable;
-        delete node.unavailableAt;
-      }
+    }
+    // Only opening the profile itself proves it's reachable again (§9 Identity).
+    if (fromProfileView && node.unavailable && at >= (node.unavailableAt ?? 0)) {
+      delete node.unavailable;
+      delete node.unavailableAt;
     }
 
     if (node.usernameKey === key && isNewName) {
@@ -389,38 +414,59 @@ export class ViewerStore {
   /**
    * Apply the viewer's own followers/following from an official export: a complete snapshot at
    * `exportedAt`, so edges last confirmed before then and absent from it become stale.
+   * Atomic: either the whole snapshot lands or nothing does.
    */
-  async applyExportSnapshot(input: ExportSnapshotInput, now: number): Promise<void> {
-    const { exportedAt } = input;
-    const ids = await this.resolveUsernames([...input.following, ...input.followers], exportedAt);
-    const idOf = (u: string): string => {
-      const id = ids.get(u.toLowerCase());
-      if (id === undefined) throw new Error(`unresolved username: ${u}`);
-      return id;
-    };
+  async applyExportSnapshot(
+    input: ExportSnapshotInput,
+    now: number,
+  ): Promise<ExportSnapshotResult> {
+    const exportedAt = TimestampSchema.parse(input.exportedAt);
     const v = this.viewerId;
-    const edges: EdgeInput[] = [
-      ...input.following.map((u) => ({ from: v, to: idOf(u), source: 'export' as const })),
-      ...input.followers.map((u) => ({ from: idOf(u), to: v, source: 'export' as const })),
-    ];
-    await this.upsertEdges(edges, exportedAt);
-    for (const direction of ['following', 'followers'] as const) {
-      await this.completeList({
-        ownerId: v,
-        direction,
-        sessionStartedAt: exportedAt,
-        completedAt: now,
-      });
-    }
-    await this.db.transaction('rw', this.db.viewers, async () => {
-      const meta = await this.db.viewers.get(v);
-      await this.db.viewers.put({
-        username: '',
-        ...meta,
-        viewerId: v,
-        importedExportAt: maxOpt(meta?.importedExportAt, exportedAt),
-      });
-    });
+    const following = input.following ?? [];
+    const followers = input.followers ?? [];
+    return this.db.transaction(
+      'rw',
+      [this.db.nodes, this.db.edges, this.db.viewers],
+      async (): Promise<ExportSnapshotResult> => {
+        const ids = await this.resolveUsernames([...following, ...followers], exportedAt);
+        const idOf = (u: string): string => {
+          const id = ids.get(u.toLowerCase());
+          if (id === undefined) throw new Error(`unresolved username: ${u}`);
+          return id;
+        };
+        const added = await this.upsertEdges(
+          [
+            ...following.map((u) => ({ from: v, to: idOf(u), source: 'export' as const })),
+            ...followers.map((u) => ({ from: idOf(u), to: v, source: 'export' as const })),
+          ],
+          exportedAt,
+        );
+        let markedStale = 0;
+        const partial = new Set(input.partial ?? []);
+        const completeLists = [
+          ...(input.following ? (['following'] as const) : []),
+          ...(input.followers ? (['followers'] as const) : []),
+        ].filter((d) => !partial.has(d));
+        for (const direction of completeLists) {
+          const res = await this.completeList({
+            ownerId: v,
+            direction,
+            sessionStartedAt: exportedAt,
+            completedAt: now,
+          });
+          markedStale += res.markedStale;
+        }
+        const meta = await this.db.viewers.get(v);
+        await this.db.viewers.put({
+          username: '',
+          ...meta,
+          viewerId: v,
+          importedExportAt: maxOpt(meta?.importedExportAt, exportedAt),
+        });
+        const placeholders = [...ids.values()].filter((id) => id.startsWith(PLACEHOLDER_PREFIX));
+        return { added, markedStale, placeholders: new Set(placeholders).size };
+      },
+    );
   }
 
   // ── Edges ─────────────────────────────────────────────────────────────────
@@ -507,25 +553,39 @@ export class ViewerStore {
 
   /**
    * The human scrolled a list to its end (§9 Data freshness). Marks in-scope edges not confirmed
-   * since `sessionStartedAt` as stale. Never call this for partial lists. Capped hub lists and
-   * mutuals lists can never be complete.
+   * since `sessionStartedAt` as stale. Never call this for partial lists. Capped hub lists can
+   * never be complete.
+   *
+   * For `mutuals` ("Followed by…" on P), the list is every account the viewer follows that
+   * follows P, so only edges A → P where A is a current 1st-degree account are in scope, and
+   * P's own follower coverage is not changed.
    */
   async completeList(input: CompleteListInput): Promise<CompleteListResult> {
+    const direction = ListDirectionSchema.parse(input.direction);
     const sessionStartedAt = TimestampSchema.parse(input.sessionStartedAt);
     const completedAt = TimestampSchema.parse(input.completedAt);
-    const { ownerId, direction } = input;
+    const { ownerId } = input;
     return this.db.transaction('rw', this.db.nodes, this.db.edges, async () => {
       const owner = await this.getNode(ownerId);
       if (direction === 'followers' && owner?.followersCapped) {
         return { completed: false, markedStale: 0 };
       }
-      const scope =
-        direction === 'following' ? await this.edgesFrom(ownerId) : await this.edgesTo(ownerId);
+      let scope: Edge[];
+      if (direction === 'following') {
+        scope = await this.edgesFrom(ownerId);
+      } else if (direction === 'followers') {
+        scope = await this.edgesTo(ownerId);
+      } else {
+        const firstDegree = new Set(
+          (await this.edgesFrom(this.viewerId)).filter((e) => !e.stale).map((e) => e.to),
+        );
+        scope = (await this.edgesTo(ownerId)).filter((e) => firstDegree.has(e.from));
+      }
       const toStale = scope
         .filter((e) => !e.stale && e.lastConfirmedAt < sessionStartedAt)
         .map((e): Edge => ({ ...e, stale: true, staleAt: completedAt }));
       await this.db.edges.bulkPut(toStale);
-      if (owner) {
+      if (owner && direction !== 'mutuals') {
         const next: UserNode =
           direction === 'following'
             ? { ...owner, followingCoverage: 'complete', followingCompleteAt: completedAt }

@@ -30,5 +30,9 @@ export default tseslint.config(
     files: ['src/graph/**/*.ts', 'tests/**/*.ts'],
     rules: { '@typescript-eslint/no-non-null-assertion': 'off' },
   },
+  {
+    files: ['scripts/**/*.ts', 'tests/**/*.ts', '*.config.ts'],
+    languageOptions: { globals: { ...globals.node } },
+  },
   prettier,
 );

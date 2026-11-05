@@ -1,0 +1,29 @@
+{
+  "relationships_following": [
+    {
+      "title": "fake_alex",
+      "string_list_data": [
+        { "href": "https://www.instagram.com/_u/fake_alex", "timestamp": 1761955300 }
+      ]
+    },
+    {
+      "title": "fake_morgan",
+      "string_list_data": [
+        { "href": "https://www.instagram.com/_u/fake_morgan", "timestamp": 1761000000 }
+      ]
+    },
+    {
+      "title": "",
+      "string_list_data": [
+        { "href": "https://www.instagram.com/_u/fake_href_only", "timestamp": 1760000000 }
+      ]
+    },
+    {
+      "title": "fake_pending",
+      "string_list_data": [
+        { "href": "https://www.instagram.com/_u/fake_pending", "timestamp": 1760500000 }
+      ]
+    },
+    { "title": "", "string_list_data": [{ "timestamp": 1760000001 }] }
+  ]
+}

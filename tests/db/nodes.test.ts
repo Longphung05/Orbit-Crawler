@@ -98,15 +98,31 @@ describe('username changes (§9 Identity)', () => {
 });
 
 describe('unavailable accounts', () => {
-  it('markUnavailable keeps edges; seeing the profile again clears it', async () => {
+  it('markUnavailable keeps edges; only opening the profile itself clears it', async () => {
     const s = store();
     await s.upsertNodes([obs('42', 'fake_alex')], 1);
     await s.upsertEdges([{ from: s.viewerId, to: '42', source: 'following_list' }], 1);
     await s.markUnavailable('42', 5);
     expect(await s.getNode('42')).toMatchObject({ unavailable: true, unavailableAt: 5 });
     expect(await s.getEdge(s.viewerId, '42')).toBeDefined();
+
+    // Appearing as a row in someone else's list is not enough.
+    await s.recordListPage({
+      ownerId: '77',
+      direction: 'followers',
+      rows: [obs('42', 'fake_alex')],
+      observedAt: 8,
+    });
     await s.upsertNodes([obs('42', 'fake_alex')], 9);
-    expect((await s.getNode('42'))?.unavailable).toBeUndefined();
+    expect((await s.getNode('42'))?.unavailable).toBe(true);
+
+    // A profile view older than the unavailable mark doesn't count either.
+    await s.upsertNodes([obs('42', 'fake_alex')], 4, { fromProfileView: true });
+    expect((await s.getNode('42'))?.unavailable).toBe(true);
+
+    await s.upsertNodes([obs('42', 'fake_alex')], 10, { fromProfileView: true });
+    expect(await s.getNode('42')).not.toHaveProperty('unavailable');
+    expect(await s.getNode('42')).not.toHaveProperty('unavailableAt');
   });
 
   it('markUnavailable on an unknown id is a no-op', async () => {

@@ -15,5 +15,8 @@ export default defineConfig({
   },
   vite: () => ({
     plugins: [preact(), tailwindcss()],
+    // Chrome supports modulepreload natively; the polyfill would add a fetch() of our own
+    // chunks to the bundle. Keep the shipped code free of network primitives (§2, §12).
+    build: { modulePreload: { polyfill: false } },
   }),
 });

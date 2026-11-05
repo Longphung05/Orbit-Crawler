@@ -198,6 +198,53 @@ describe('completeList and stale marking (§9 Data freshness)', () => {
     expect(e).toMatchObject({ stale: false, lastConfirmedAt: 30 });
     expect(e?.staleAt).toBeUndefined();
   });
+
+  it('a complete mutuals list stales only edges from current 1st-degree accounts', async () => {
+    const s = store();
+    const v = s.viewerId;
+    // V follows 7 and 8. 9 is not 1st-degree. All three were seen following 42.
+    await s.upsertEdges(
+      [
+        { from: v, to: '7', source: 'following_list' },
+        { from: v, to: '8', source: 'following_list' },
+        { from: '7', to: '42', source: 'mutuals' },
+        { from: '8', to: '42', source: 'mutuals' },
+        { from: '9', to: '42', source: 'followers_list' },
+      ],
+      10,
+    );
+    await s.upsertNodes([obs('42', 'fake_target')], 10);
+    // New session at 20 shows only 7 in "Followed by…".
+    await s.recordListPage({
+      ownerId: '42',
+      direction: 'mutuals',
+      rows: [obs('7', 'fake_a')],
+      observedAt: 20,
+    });
+    const res = await s.completeList({
+      ownerId: '42',
+      direction: 'mutuals',
+      sessionStartedAt: 20,
+      completedAt: 21,
+    });
+    expect(res).toEqual({ completed: true, markedStale: 1 });
+    expect(await s.getEdge('8', '42')).toMatchObject({ stale: true });
+    expect(await s.getEdge('7', '42')).toMatchObject({ stale: false });
+    expect(await s.getEdge('9', '42')).toMatchObject({ stale: false }); // not in mutuals' scope
+    expect((await s.getNode('42'))?.followersCoverage).toBe('none'); // mutuals ≠ full followers
+  });
+
+  it('rejects an unknown list direction', async () => {
+    const s = store();
+    await expect(
+      s.completeList({
+        ownerId: '42',
+        direction: 'likes' as 'mutuals',
+        sessionStartedAt: 1,
+        completedAt: 2,
+      }),
+    ).rejects.toThrow();
+  });
 });
 
 describe('mergeEdges', () => {

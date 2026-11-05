@@ -3,5 +3,12 @@
   "compilerOptions": {
     "types": ["node"]
   },
-  "include": ["tests/**/*", "src/**/*", "entrypoints/**/*", "*.config.ts", ".wxt/wxt.d.ts"]
+  "include": [
+    "tests/**/*",
+    "src/**/*",
+    "entrypoints/**/*",
+    "*.config.ts",
+    ".wxt/wxt.d.ts",
+    "scripts/**/*"
+  ]
 }

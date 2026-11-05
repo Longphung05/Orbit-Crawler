@@ -8,6 +8,7 @@ export {
   type CompleteListResult,
   type EdgeInput,
   type ExportSnapshotInput,
+  type ExportSnapshotResult,
   type ListPageInput,
   type ListPageResult,
 } from './viewer-store';

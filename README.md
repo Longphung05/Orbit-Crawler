@@ -3,7 +3,8 @@
 LinkedIn-style 1st / 2nd / 3rd-degree connections for Instagram, as a Chrome MV3 extension.
 Passive and local-only: Orbit never contacts Instagram by itself. See `CLAUDE.md` for the full spec.
 
-> Status: **Phase 1 (scaffold)**. Popup and side panel shells only.
+> Status: **Phase 4 of 8**. Graph engine, local database, and export import are built.
+> Nothing runs on instagram.com yet (passive capture is Phase 5, the profile badge Phase 6).
 
 ## Develop
 
@@ -22,6 +23,29 @@ npm run compile    # TypeScript typecheck (app + tests)
 2. Open `chrome://extensions`, enable **Developer mode**
 3. **Load unpacked** → select `.output/chrome-mv3`
 4. Click the Orbit toolbar icon → **Open explorer** opens the side panel
+
+## Your Instagram data export
+
+1. Instagram → **Accounts Center → Your information and permissions → Download your information**
+2. Choose **Some of your information → Followers and following** (no need for media)
+3. Format **JSON** (not HTML), date range **All time**
+4. Download the `.zip` when Instagram emails you
+
+### Check an export locally (no extension needed)
+
+```sh
+npm run inspect-export -- "C:\path\to\instagram-you-2026-11-01-xxxx.zip"
+npm run inspect-export -- "C:\path\to\unzipped-folder"
+```
+
+Prints which files were recognised, follower/following counts, and the detected export date.
+It never prints usernames, writes nothing, and makes no network requests.
+
+### Import into the extension
+
+Side panel → **Import your Instagram export** → choose the `.zip` (or unzipped folder). You can
+review the result straight away; saving it needs Orbit to know which Instagram account is yours,
+which it detects when you open instagram.com while logged in (Phase 5).
 
 ### Troubleshooting
 

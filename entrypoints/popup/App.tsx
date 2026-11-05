@@ -1,4 +1,4 @@
-import { useCounts } from '../../src/ui/useCounts';
+import { useActiveViewer, useViewerCounts } from '../../src/ui/hooks';
 
 async function openSidePanel(): Promise<void> {
   const win = await browser.windows.getCurrent();
@@ -7,7 +7,8 @@ async function openSidePanel(): Promise<void> {
 }
 
 export function App() {
-  const counts = useCounts();
+  const viewer = useActiveViewer();
+  const counts = useViewerCounts(viewer?.viewerId);
   return (
     <main class="w-72 space-y-3 p-4 font-sans text-sm text-slate-800">
       <header class="flex items-center justify-between">
@@ -22,14 +23,16 @@ export function App() {
       <dl class="grid grid-cols-2 gap-2">
         <div class="rounded bg-slate-100 p-2">
           <dt class="text-xs text-slate-500">Accounts</dt>
-          <dd class="text-lg font-semibold">{counts?.nodes ?? '…'}</dd>
+          <dd class="text-lg font-semibold">{counts?.nodes.toLocaleString() ?? '…'}</dd>
         </div>
         <div class="rounded bg-slate-100 p-2">
           <dt class="text-xs text-slate-500">Connections</dt>
-          <dd class="text-lg font-semibold">{counts?.edges ?? '…'}</dd>
+          <dd class="text-lg font-semibold">{counts?.edges.toLocaleString() ?? '…'}</dd>
         </div>
       </dl>
-      <p class="text-xs text-slate-500">No account detected yet.</p>
+      <p class="text-xs text-slate-500">
+        {viewer ? `Logged in as @${viewer.username}` : 'No account detected yet.'}
+      </p>
       <button
         type="button"
         class="w-full rounded bg-indigo-600 px-3 py-2 font-medium text-white hover:bg-indigo-700"

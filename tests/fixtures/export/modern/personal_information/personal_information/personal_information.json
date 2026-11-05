@@ -1,0 +1,13 @@
+{
+  "profile_user": [
+    {
+      "title": "",
+      "media_map_data": {},
+      "string_map_data": {
+        "Email": { "href": "", "value": "nobody@example.invalid", "timestamp": 0 },
+        "Username": { "href": "", "value": "fake_me", "timestamp": 0 },
+        "Name": { "href": "", "value": "Fake Person", "timestamp": 0 }
+      }
+    }
+  ]
+}
