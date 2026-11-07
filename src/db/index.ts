@@ -12,7 +12,14 @@ export {
   type ListPageInput,
   type ListPageResult,
 } from './viewer-store';
-export { loadGraph, isOldEdge, toGraphEdge, toGraphNode } from './load-graph';
+export {
+  loadGraph,
+  loadSnapshot,
+  isOldEdge,
+  toGraphEdge,
+  toGraphNode,
+  type GraphSnapshot,
+} from './load-graph';
 export {
   NodeObservationSchema,
   UsernameSchema,

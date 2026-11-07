@@ -32,16 +32,33 @@ export function isOldEdge(
   return now - e.lastConfirmedAt > settings.staleAfterDays * DAY_MS;
 }
 
-export async function loadGraph(store: ViewerStore, now: number): Promise<OrbitGraph> {
+export interface GraphSnapshot {
+  graph: OrbitGraph;
+  /** Every stored account, by id, for turning graph ids back into people. */
+  nodes: ReadonlyMap<string, UserNode>;
+  settings: OrbitSettings;
+  /** Most recent time any known edge was confirmed (the graph's freshness), or null if empty. */
+  updatedAt: number | null;
+}
+
+export async function loadSnapshot(store: ViewerStore, now: number): Promise<GraphSnapshot> {
   const [nodes, edges, settings] = await Promise.all([
     store.allNodes(),
     store.allEdges(),
     store.getSettings(),
   ]);
   const minConfirmedAt = settings.excludeStale ? now - settings.staleAfterDays * DAY_MS : undefined;
-  return OrbitGraph.build(
+  let updatedAt: number | null = null;
+  for (const e of edges)
+    if (updatedAt === null || e.lastConfirmedAt > updatedAt) updatedAt = e.lastConfirmedAt;
+  const graph = OrbitGraph.build(
     edges.map(toGraphEdge),
     nodes.map(toGraphNode),
     minConfirmedAt === undefined ? {} : { minConfirmedAt },
   );
+  return { graph, nodes: new Map(nodes.map((n) => [n.id, n])), settings, updatedAt };
+}
+
+export async function loadGraph(store: ViewerStore, now: number): Promise<OrbitGraph> {
+  return (await loadSnapshot(store, now)).graph;
 }

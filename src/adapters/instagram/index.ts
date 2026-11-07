@@ -20,5 +20,10 @@ export {
   type MutualHint,
   type ObservedResponse,
 } from './interpret';
+export {
+  findUsernameAnchor,
+  profileUsernameFromPath,
+  USERNAME_ANCHOR_SELECTORS,
+} from './profile-page';
 export { detectViewer, type ViewerDetection } from './viewer';
 export { skeleton, type Skeleton } from './skeleton';

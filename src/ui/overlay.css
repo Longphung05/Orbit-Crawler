@@ -1,0 +1,267 @@
+/*
+ * Badge + paths popover. Rendered inside a Shadow DOM, so none of Instagram's CSS reaches it and
+ * none of this reaches Instagram. Plain CSS on purpose: Tailwind v4's @property rules do not work
+ * inside a shadow root.
+ */
+.orbit {
+  --bg: #ffffff;
+  --fg: #1c1e21;
+  --muted: #65676b;
+  --line: #dbdbdb;
+  --shadow: 0 4px 24px rgba(0, 0, 0, 0.18);
+  --first: #1d4ed8;
+  --first-fg: #ffffff;
+  --second-bg: #dbeafe;
+  --second-fg: #1e3a8a;
+  --third-bg: #ede9fe;
+  --third-fg: #4c1d95;
+  --none-bg: #f1f1f1;
+  --none-fg: #555;
+  --self-bg: #dcfce7;
+  --self-fg: #14532d;
+  --link: #1d4ed8;
+
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font:
+    13px/1.4 system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  color: var(--fg);
+  text-align: left;
+  letter-spacing: normal;
+  text-transform: none;
+}
+.orbit[data-theme='dark'] {
+  --bg: #1c1c1e;
+  --fg: #f5f5f5;
+  --muted: #a8a8a8;
+  --line: #3a3a3c;
+  --shadow: 0 4px 24px rgba(0, 0, 0, 0.6);
+  --first: #3b82f6;
+  --second-bg: #1e3a8a;
+  --second-fg: #dbeafe;
+  --third-bg: #4c1d95;
+  --third-fg: #ede9fe;
+  --none-bg: #2c2c2e;
+  --none-fg: #c7c7c7;
+  --self-bg: #14532d;
+  --self-fg: #dcfce7;
+  --link: #93c5fd;
+}
+.orbit *,
+.orbit *::before,
+.orbit *::after {
+  box-sizing: border-box;
+}
+
+/* ── Badge ─────────────────────────────────────────────────────────────── */
+.orbit-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 3px 10px;
+  border: 0;
+  border-radius: 999px;
+  font: inherit;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: default;
+}
+.orbit-badge[data-clickable='true'] {
+  cursor: pointer;
+}
+.orbit-badge[data-clickable='true']:hover {
+  filter: brightness(0.96);
+}
+.orbit-badge:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 2px;
+}
+.orbit-tone-first {
+  background: var(--first);
+  color: var(--first-fg);
+}
+.orbit-tone-second {
+  background: var(--second-bg);
+  color: var(--second-fg);
+}
+.orbit-tone-third {
+  background: var(--third-bg);
+  color: var(--third-fg);
+}
+.orbit-tone-none {
+  background: var(--none-bg);
+  color: var(--none-fg);
+  font-weight: 500;
+}
+.orbit-tone-self {
+  background: var(--self-bg);
+  color: var(--self-fg);
+}
+
+/* ── Avatars ───────────────────────────────────────────────────────────── */
+.orbit-stack {
+  display: inline-flex;
+}
+.orbit-stack .orbit-avatar + .orbit-avatar {
+  margin-left: -8px;
+}
+.orbit-avatar {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  overflow: hidden;
+  border: 2px solid var(--bg);
+  border-radius: 50%;
+  background: hsl(var(--h, 210) 45% 42%);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+}
+.orbit-avatar img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.orbit-avatar-lg {
+  width: 28px;
+  height: 28px;
+  font-size: 11px;
+}
+
+/* ── Popover ───────────────────────────────────────────────────────────── */
+.orbit-pop {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 1;
+  width: 340px;
+  max-width: calc(100vw - 16px);
+  max-height: min(70vh, 520px);
+  overflow: auto;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg);
+  box-shadow: var(--shadow);
+}
+.orbit[data-placement='floating'] .orbit-pop {
+  top: auto;
+  bottom: calc(100% + 8px);
+  right: 0;
+  left: auto;
+}
+.orbit-pop h2 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.orbit-muted {
+  color: var(--muted);
+  font-size: 12px;
+}
+.orbit-note {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.orbit-foot {
+  margin: 12px 0 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.orbit-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.orbit-group-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+  padding: 6px 4px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.orbit-group-btn:hover {
+  background: color-mix(in srgb, var(--fg) 7%, transparent);
+}
+.orbit-group-btn:focus-visible {
+  outline: 2px solid var(--link);
+}
+.orbit-group-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.orbit-chevron {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.orbit-paths {
+  margin: 2px 0 6px 18px;
+  padding: 0;
+  list-style: none;
+}
+.orbit-path {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  padding: 4px 0;
+}
+.orbit-arrow {
+  color: var(--muted);
+}
+.orbit-person {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--link);
+  font-weight: 500;
+  text-decoration: none;
+}
+.orbit-person:hover {
+  text-decoration: underline;
+}
+.orbit-person .orbit-avatar {
+  width: 18px;
+  height: 18px;
+  border-width: 1px;
+  font-size: 8px;
+}
+.orbit-you,
+.orbit-target {
+  font-weight: 600;
+}
+.orbit-wait {
+  padding: 8px 0;
+}

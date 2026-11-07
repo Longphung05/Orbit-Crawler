@@ -11,6 +11,11 @@ export const OrbitSettingsSchema = z.object({
   staleAfterDays: z.number().int().positive(),
   /** Exclude edges unconfirmed for staleAfterDays (otherwise they're only dimmed). */
   excludeStale: z.boolean(),
+  /**
+   * Load profile pictures in the badge. Off by default: each picture is a request to Instagram's
+   * CDN that the page itself did not make (§2.1), and the stored URLs expire.
+   */
+  showAvatarImages: z.boolean(),
 });
 
 export type OrbitSettings = z.infer<typeof OrbitSettingsSchema>;
@@ -23,4 +28,5 @@ export const DEFAULT_SETTINGS: Readonly<OrbitSettings> = Object.freeze({
   hubFollowerListCap: 2_000,
   staleAfterDays: 90,
   excludeStale: false,
+  showAvatarImages: false,
 });

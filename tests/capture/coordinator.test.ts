@@ -129,3 +129,26 @@ describe('CaptureCoordinator', () => {
     expect(await new ViewerStore(db, P.VIEWER).counts()).toMatchObject({ edges: 2 });
   });
 });
+
+describe('CaptureCoordinator → badge refresh hooks', () => {
+  it('tells the callback which account and tab each capture belonged to', async () => {
+    const seen: { viewerId: string; tabId: number; status: string }[] = [];
+    const c = new CaptureCoordinator(freshDb(), (r) =>
+      seen.push({ viewerId: r.viewerId, tabId: r.tabId, status: r.outcome.status }),
+    );
+    await c.handle(viewerMsg(P.VIEWER), IG_TAB);
+    await c.handle(responseMsg(P.followingPage1), IG_TAB);
+    expect(seen).toEqual([{ viewerId: P.VIEWER, tabId: 7, status: 'ok' }]);
+  });
+
+  it('tabsForViewer lists only that account’s tabs, and forgets closed ones', async () => {
+    const c = new CaptureCoordinator(freshDb());
+    await c.handle(viewerMsg(P.VIEWER), IG_TAB);
+    await c.handle(viewerMsg('2000000002'), { ...IG_TAB, tabId: 8 });
+    expect(c.tabsForViewer(P.VIEWER)).toEqual([7]);
+    expect(c.tabsForViewer('2000000002')).toEqual([8]);
+    expect(c.tabsForViewer().sort()).toEqual([7, 8]);
+    c.forgetTab(7);
+    expect(c.tabsForViewer(P.VIEWER)).toEqual([]);
+  });
+});

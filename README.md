@@ -3,7 +3,8 @@
 LinkedIn-style 1st / 2nd / 3rd-degree connections for Instagram, as a Chrome MV3 extension.
 Passive and local-only: Orbit never contacts Instagram by itself. See `CLAUDE.md` for the full spec.
 
-> Status: **Phase 5 of 8**. Passive capture works on instagram.com; the profile badge is Phase 6.
+> Status: **Phase 6 of 8**. Passive capture and the profile badge + paths popover are built;
+> the side panel explorer is Phase 7.
 
 ## Develop
 
@@ -65,3 +66,17 @@ requests, so what it learns grows only as fast as you browse.
 
 `Cannot find native binding` from Vite/rolldown is an npm optional-dependency bug.
 Delete `node_modules` and `package-lock.json`, then run `npm install` again.
+
+## The profile badge (Phase 6)
+
+On a profile page Orbit shows a pill next to the username: `You`, `1st`, `2nd · via 4`,
+`3rd · via 2` or `Out of orbit`. Click a 2nd/3rd badge to see the people who connect you, grouped by
+the person you follow. Hover for what the numbers mean.
+
+- `≤3rd` / `via 4+`: Orbit only knows what you've imported or browsed, so a degree is "this close
+  or closer" and a count is "at least". Open more lists (scroll them to the end) to firm them up.
+- The badge is a separate Shadow DOM element positioned over the username; it never changes
+  Instagram's own elements. If the username can't be found it sits in a bottom-right corner pill.
+- Avatars are initials by default. Profile pictures would be requests to Instagram's CDN that the
+  page didn't make, so they're off (`showAvatarImages` setting, no UI for it until Phase 7).
+- After you open a profile, Instagram's data arrives a moment later; the badge updates itself then.

@@ -82,6 +82,8 @@ export function ImportPanel({ viewer }: { viewer: ViewerMeta | null | undefined 
     try {
       const store = new ViewerStore(getDb(), viewer.viewerId);
       const result = await commitImport(store, parsed, Date.now());
+      // Badges on open instagram.com tabs should pick up the imported connections.
+      browser.runtime.sendMessage({ type: 'orbit/graph-changed' }).catch(() => undefined);
       setState({ step: 'done', result, parsed });
     } catch (err) {
       console.warn('[orbit] import commit failed', err);

@@ -21,6 +21,8 @@ const PENDING_MAX = 100;
 const PENDING_TTL_MS = 60_000;
 
 export interface ProcessedResult {
+  viewerId: string;
+  tabId: number;
   outcome: AdapterOutcome;
   summary?: ApplySummary;
 }
@@ -38,6 +40,13 @@ export class CaptureCoordinator {
 
   viewerForTab(tabId: number): string | undefined {
     return this.tabViewer.get(tabId);
+  }
+
+  /** Tabs currently attributed to an account (or to any account, when none is given). */
+  tabsForViewer(viewerId?: string): number[] {
+    return [...this.tabViewer]
+      .filter(([, v]) => viewerId === undefined || v === viewerId)
+      .map(([tabId]) => tabId);
   }
 
   /** Entry point for runtime messages. Resolves when the message has been fully handled. */
@@ -107,7 +116,7 @@ export class CaptureCoordinator {
     const outcome = interpretResponse({ url: msg.url, status: msg.status, text: msg.text });
     await recordOutcome(this.db, outcome, msg.at);
     if (outcome.status !== 'ok') {
-      this.onProcessed?.({ outcome });
+      this.onProcessed?.({ viewerId, tabId, outcome });
       return;
     }
     const summary = await applyEvents(outcome.events, {
@@ -116,6 +125,6 @@ export class CaptureCoordinator {
       tabId,
       sessions: this.sessions,
     });
-    this.onProcessed?.({ outcome, summary });
+    this.onProcessed?.({ viewerId, tabId, outcome, summary });
   }
 }
