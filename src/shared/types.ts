@@ -68,4 +68,10 @@ export interface ViewerMeta {
   username: string;
   importedExportAt?: number;
   lastActiveAt?: number;
+  /**
+   * Coverage of the viewer's own lists. Kept here as well as on the viewer's node because an
+   * export import completes these lists before any node for the viewer exists.
+   */
+  followingCoverage?: Coverage;
+  followersCoverage?: Coverage;
 }

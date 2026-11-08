@@ -1,7 +1,14 @@
 // Isolated-world content script (§6.2, §9 Viewer): bridges the page observer to the background,
 // detects the logged-in account from data already in the page, and watches SPA navigation.
 // It never modifies Instagram's DOM: the badge is a separate Shadow DOM host (src/ui).
-import { CONTENT_MATCHES, detectViewer, ORBIT_CHANNEL } from '../src/adapters/instagram';
+import {
+  CONTENT_MATCHES,
+  detectViewer,
+  findFollowedByLine,
+  ORBIT_CHANNEL,
+  profileUsernameFromPath,
+} from '../src/adapters/instagram';
+import { createDomScanner } from '../src/capture/dom-scan';
 import { PageMessageSchema, type RuntimeMessage } from '../src/capture/messages';
 import { watchRoute } from '../src/capture/route-watcher';
 import { RefreshSchema } from '../src/query/schemas';
@@ -27,12 +34,24 @@ export default defineContentScript({
       browser.runtime.sendMessage(msg).catch(() => undefined);
     };
 
+    // The profile header's "Followed by …" line: read-only, as a fallback to network capture.
+    const scanner = createDomScanner({
+      profileUsername: () => profileUsernameFromPath(window.location.pathname),
+      viewerId: () => viewerId,
+      read: () => findFollowedByLine(document),
+      send: toBackground,
+      setTimeout: (fn, ms) => ctx.setTimeout(fn, ms),
+      clearTimeout: (h) => clearTimeout(h as number),
+      now: Date.now,
+    });
+
     const detect = (): void => {
       try {
         const scripts = Array.from(document.scripts, (s) => s.textContent ?? '');
         const d = detectViewer(scripts);
         viewerId = d.viewerId;
         overlay.sync();
+        scanner.schedule();
         if (d.viewerId === reported && d.viewerId !== null) return;
         reported = d.viewerId;
         const msg: RuntimeMessage = {
@@ -115,6 +134,7 @@ export default defineContentScript({
       browser.runtime.onMessage.removeListener(onRuntimeMessage);
       stopRoute();
       overlay.destroy();
+      scanner.destroy();
     });
   },
 });

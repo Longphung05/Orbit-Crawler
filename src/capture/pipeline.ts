@@ -73,6 +73,23 @@ async function applyMutualHint(
   if (edges.length) sum.added += await store.upsertEdges(edges, at);
 }
 
+/**
+ * The "Followed by …" line on `profileId`'s header, read from the page. Same meaning as the
+ * network version (`applyMutualHint`), just from the DOM: each name is someone the viewer follows.
+ */
+export async function applyDomMutuals(
+  ctx: ApplyContext,
+  profileId: string,
+  usernames: readonly string[],
+  others: number | undefined,
+): Promise<ApplySummary> {
+  const sum: ApplySummary = { added: 0, completed: 0, staled: 0 };
+  const hint: MutualHint = { users: [], usernames: [...usernames] };
+  if (others !== undefined) hint.count = usernames.length + others;
+  await applyMutualHint(ctx, profileId, hint, sum);
+  return sum;
+}
+
 export async function applyEvents(
   events: readonly CaptureEvent[],
   ctx: ApplyContext,

@@ -19,8 +19,8 @@ export interface BadgeModel {
   tone: BadgeTone;
   /** Tooltip / accessible description. */
   title: string;
-  /** Whether clicking opens a paths list (there is something to list). */
-  hasPaths: boolean;
+  /** What clicking opens: the paths list, a "how to firm this up" panel, or nothing. */
+  popover: 'paths' | 'tips' | null;
 }
 
 const ORDINAL: Record<1 | 2 | 3, string> = { 1: '1st', 2: '2nd', 3: '3rd' };
@@ -32,10 +32,10 @@ export function viaText(count: number, exact: boolean): string {
 
 export function badgeModel(view: ProfileViewOk): BadgeModel {
   if (view.state === 'self') {
-    return { label: 'You', tone: 'self', title: 'This is your profile.', hasPaths: false };
+    return { label: 'You', tone: 'self', title: 'This is your profile.', popover: null };
   }
   if (view.state === 'first') {
-    return { label: '1st', tone: 'first', title: 'You follow this account.', hasPaths: false };
+    return { label: '1st', tone: 'first', title: 'You follow this account.', popover: null };
   }
   if (view.state === 'out_of_orbit') {
     const base = view.known
@@ -44,10 +44,10 @@ export function badgeModel(view: ProfileViewOk): BadgeModel {
     // There is no paths list to carry the hidden-hub line (§7.3), so the tooltip does.
     const hubs = notes(view).find((n) => n.startsWith('Also reachable'));
     return {
-      label: 'Out of orbit',
+      label: outOfOrbitLabel(view),
       tone: 'none',
       title: hubs ? `${base} ${hubs}` : base,
-      hasPaths: false,
+      popover: 'tips',
     };
   }
   const degree = view.state === 'second' ? 2 : 3;
@@ -58,12 +58,24 @@ export function badgeModel(view: ProfileViewOk): BadgeModel {
     tone: view.state,
     title:
       view.degreeExact && view.connectorsExact ? 'Click to see how you connect.' : BOUND_TOOLTIP,
-    hasPaths: true,
+    popover: 'paths',
   };
+}
+
+/**
+ * "Out of orbit" read as "not connected", but it only ever means "no link seen yet". With your
+ * full following list known it can't be 1st, and with no "Followed by" link it is most likely
+ * 3rd or farther: `3rd+ ?`. Without that list Orbit can't even rule out 1st: `Unknown`.
+ */
+export function outOfOrbitLabel(view: Pick<ProfileViewOk, 'firstLayer'>): string {
+  return view.firstLayer === 'complete' ? '3rd+ ?' : 'Unknown';
 }
 
 /** Popover heading: "Connected through 4 people you follow". */
 export function headline(view: ProfileViewOk): string {
+  if (view.state === 'out_of_orbit') {
+    return view.known ? 'No connection known yet' : "Orbit hasn't seen this account yet";
+  }
   const n = view.connectorCount;
   const plus = view.connectorsExact ? '' : '+';
   const people = `${n}${plus} ${n === 1 && view.connectorsExact ? 'person' : 'people'} you follow`;
@@ -93,6 +105,42 @@ export function freshnessLine(view: ProfileViewOk, now: number): string {
     ? `Nothing confirmed yet · ${accounts}`
     : `Last updated ${relativeTime(view.updatedAt, now)} · ${accounts}`;
 }
+
+/**
+ * What would make this answer better, in plain words. Orbit only knows what you've imported or
+ * opened yourself, so the fix is always something you do (it never opens anything for you).
+ */
+export function guidance(view: ProfileViewOk): string[] {
+  if (view.state === 'self' || view.state === 'first') return [];
+  const tips: string[] = [];
+  if (view.firstLayer !== 'complete') {
+    tips.push(
+      "Orbit doesn't have your full following list yet. Import your Instagram export in the Orbit side panel, or scroll your own Following list to the end.",
+    );
+  }
+  if (view.state === 'out_of_orbit') {
+    tips.push(
+      'On this profile, click “Followed by … and N others” and scroll that list to the end: it shows exactly which people you follow also follow them. If there is no such line, there are probably none.',
+    );
+    if (view.isPrivate !== true) tips.push(THIRD_DEGREE_TIP);
+  } else if (view.state === 'second' && !view.connectorsExact) {
+    tips.push(
+      'For an exact count, click “Followed by … and N others” on this profile and scroll that list to the end.',
+    );
+  } else if (view.state === 'third' && !view.degreeExact) {
+    tips.push(
+      'There may be a closer connection Orbit has not seen yet. Opening “Followed by …” lists firms this up.',
+    );
+  }
+  return tips;
+}
+
+/**
+ * How a human checks for a 3rd-degree link with one list instead of a crawl: the target's
+ * followers, matched against the 2nd-degree accounts Orbit already knows.
+ */
+export const THIRD_DEGREE_TIP =
+  'To check for a 3rd-degree link, open their Followers list and scroll a little. If any follower is someone your friends follow, Orbit shows 3rd. This works better the more of your friends’ Following lists (or exports they’ve shared with you) Orbit has.';
 
 /** Extra explanatory lines for the popover, in display order. */
 export function notes(view: ProfileViewOk): string[] {

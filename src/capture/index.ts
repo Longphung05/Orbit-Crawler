@@ -3,6 +3,7 @@ export {
   computeHealth,
   diagnosticsReport,
   isFailing,
+  recordDomMutuals,
   recordOutcome,
   recordViewerDetection,
   type Health,
@@ -15,6 +16,8 @@ export {
   type PageMessage,
   type RuntimeMessage,
 } from './messages';
-export { applyEvents, type ApplySummary } from './pipeline';
+export { applyDomMutuals, applyEvents, type ApplySummary } from './pipeline';
+export { ACTIVITY_KEEP, describeEvents, recordActivity, type ActivityItem } from './activity';
 export { ListSessions } from './sessions';
 export { watchRoute } from './route-watcher';
+export { createDomScanner, SCAN_DELAYS_MS, type DomScanDeps, type DomScanner } from './dom-scan';

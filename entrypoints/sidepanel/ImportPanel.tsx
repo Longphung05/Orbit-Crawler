@@ -1,6 +1,7 @@
 // Official export import (§6.1, §8.3): pick → read (progress) → review report → commit.
 // Reading and parsing happen entirely in this extension page; nothing is uploaded anywhere.
 import { useEffect, useRef, useState } from 'preact/hooks';
+import { recordActivity } from '../../src/capture/activity';
 import { getDb } from '../../src/db/db';
 import { ViewerStore, type ExportSnapshotResult } from '../../src/db';
 import {
@@ -14,6 +15,7 @@ import {
   type ParsedExport,
   type ReadProgress,
 } from '../../src/import';
+import { UsernameSchema } from '../../src/db/validation';
 import type { ViewerMeta } from '../../src/shared/types';
 
 type State =
@@ -21,7 +23,7 @@ type State =
   | { step: 'reading'; pct: number }
   | { step: 'review'; parsed: ParsedExport; skipped: number }
   | { step: 'saving' }
-  | { step: 'done'; result: ExportSnapshotResult; parsed: ParsedExport }
+  | { step: 'done'; result: ExportSnapshotResult; parsed: ParsedExport; friend?: string }
   | { step: 'error'; message: string };
 
 const SOURCE_LABEL: Record<ParsedExport['exportedAtSource'], string> = {
@@ -37,6 +39,8 @@ function formatDate(ms: number): string {
 export function ImportPanel({ viewer }: { viewer: ViewerMeta | null | undefined }) {
   const [state, setState] = useState<State>({ step: 'idle' });
   const [overrideOwner, setOverrideOwner] = useState(false);
+  const [whose, setWhose] = useState<'mine' | 'friend'>('mine');
+  const [friendName, setFriendName] = useState('');
   const folderInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -67,6 +71,7 @@ export function ImportPanel({ viewer }: { viewer: ViewerMeta | null | undefined 
         );
       }
       const parsed = parseExport(read.files, { sourceName, now: Date.now() });
+      setFriendName(parsed.ownerUsername ?? '');
       setState({ step: 'review', parsed, skipped: read.skipped });
     } catch (err) {
       const message =
@@ -78,13 +83,23 @@ export function ImportPanel({ viewer }: { viewer: ViewerMeta | null | undefined 
 
   async function handleCommit(parsed: ParsedExport): Promise<void> {
     if (!viewer) return;
+    const friend = whose === 'friend' ? friendName.trim().replace(/^@/, '') : undefined;
     setState({ step: 'saving' });
     try {
       const store = new ViewerStore(getDb(), viewer.viewerId);
-      const result = await commitImport(store, parsed, Date.now());
+      const result = await commitImport(store, parsed, Date.now(), friend);
+      const counts = `${parsed.following?.usernames.length ?? 0} following, ${parsed.followers?.usernames.length ?? 0} followers`;
+      await recordActivity(getDb(), viewer.viewerId, Date.now(), [
+        {
+          kind: 'import',
+          text: friend
+            ? `Imported @${friend}'s shared export: ${counts}`
+            : `Imported your Instagram export: ${counts}`,
+        },
+      ]);
       // Badges on open instagram.com tabs should pick up the imported connections.
       browser.runtime.sendMessage({ type: 'orbit/graph-changed' }).catch(() => undefined);
-      setState({ step: 'done', result, parsed });
+      setState({ step: 'done', result, parsed, friend });
     } catch (err) {
       console.warn('[orbit] import commit failed', err);
       setState({ step: 'error', message: 'Saving the import failed. Nothing was changed.' });
@@ -95,7 +110,36 @@ export function ImportPanel({ viewer }: { viewer: ViewerMeta | null | undefined 
 
   return (
     <section class="space-y-3 rounded border border-slate-200 p-3">
-      <h2 class="font-semibold">Import your Instagram export</h2>
+      <h2 class="font-semibold">Import an Instagram export</h2>
+      <div class="flex gap-3 text-xs">
+        <label class="flex items-center gap-1">
+          <input
+            type="radio"
+            name="orbit-whose"
+            checked={whose === 'mine'}
+            disabled={busy}
+            onChange={() => setWhose('mine')}
+          />
+          Mine
+        </label>
+        <label class="flex items-center gap-1">
+          <input
+            type="radio"
+            name="orbit-whose"
+            checked={whose === 'friend'}
+            disabled={busy}
+            onChange={() => setWhose('friend')}
+          />
+          A friend's (they shared it with me)
+        </label>
+      </div>
+      {whose === 'friend' && (
+        <p class="rounded bg-indigo-50 p-2 text-xs text-indigo-900">
+          A friend's export adds who <b>they</b> follow, so Orbit can find 2nd and 3rd-degree links
+          without anyone scrolling. Only import an export the friend chose to give you. It stays in
+          this browser.
+        </p>
+      )}
       <p class="text-xs text-slate-600">
         On Instagram: Accounts Center → Your information and permissions → Download your
         information. Choose <b>Followers and following</b> and format <b>JSON</b>. Orbit reads it
@@ -147,6 +191,9 @@ export function ImportPanel({ viewer }: { viewer: ViewerMeta | null | undefined 
           parsed={state.parsed}
           skipped={state.skipped}
           viewer={viewer}
+          whose={whose}
+          friendName={friendName}
+          setFriendName={setFriendName}
           owner={checkOwner(state.parsed, viewer?.username)}
           overrideOwner={overrideOwner}
           setOverrideOwner={setOverrideOwner}
@@ -159,7 +206,9 @@ export function ImportPanel({ viewer }: { viewer: ViewerMeta | null | undefined 
 
       {state.step === 'done' && (
         <div class="rounded bg-emerald-50 p-2 text-xs text-emerald-800">
-          <p class="font-medium">Imported.</p>
+          <p class="font-medium">
+            {state.friend ? `Imported @${state.friend}'s export.` : 'Imported.'}
+          </p>
           <p>
             {state.result.added} new connections · {state.result.placeholders} accounts known by
             username only (Orbit links them to real accounts as you browse)
@@ -175,6 +224,9 @@ interface ReviewProps {
   parsed: ParsedExport;
   skipped: number;
   viewer: ViewerMeta | null | undefined;
+  whose: 'mine' | 'friend';
+  friendName: string;
+  setFriendName: (v: string) => void;
   owner: OwnerCheck;
   overrideOwner: boolean;
   setOverrideOwner: (v: boolean) => void;
@@ -186,6 +238,9 @@ function Review({
   parsed,
   skipped,
   viewer,
+  whose,
+  friendName,
+  setFriendName,
   owner,
   overrideOwner,
   setOverrideOwner,
@@ -196,8 +251,12 @@ function Review({
     list
       ? `${list.usernames.length.toLocaleString()} ${label}${list.complete ? '' : ' (partial)'}`
       : `no ${label} file`;
-  const blockedByOwner = owner === 'mismatch' && !overrideOwner;
-  const canCommit = parsed.errors.length === 0 && !!viewer && !blockedByOwner;
+  const friend = friendName.trim().replace(/^@/, '');
+  const friendValid = UsernameSchema.safeParse(friend).success;
+  const friendIsYou = !!viewer?.username && friend.toLowerCase() === viewer.username.toLowerCase();
+  const blocked =
+    whose === 'mine' ? owner === 'mismatch' && !overrideOwner : !friendValid || friendIsYou;
+  const canCommit = parsed.errors.length === 0 && !!viewer && !blocked;
   const unrecognized = parsed.files.filter(
     (f) => f.status === 'unrecognized' || f.status === 'failed',
   );
@@ -251,7 +310,28 @@ function Review({
         </p>
       )}
 
-      {owner === 'mismatch' && viewer && (
+      {whose === 'friend' && (
+        <div class="space-y-1">
+          <label class="flex items-center gap-1">
+            Friend's username: @
+            <input
+              class="rounded border border-slate-300 px-1 py-0.5"
+              value={friendName}
+              onInput={(e) => setFriendName(e.currentTarget.value)}
+            />
+          </label>
+          {friendIsYou && (
+            <p class="rounded bg-red-50 p-2 text-red-700">
+              That's your own account. Choose "Mine" above instead.
+            </p>
+          )}
+          {!friendValid && friend !== '' && (
+            <p class="text-red-700">That doesn't look like an Instagram username.</p>
+          )}
+        </div>
+      )}
+
+      {whose === 'mine' && owner === 'mismatch' && viewer && (
         <div class="rounded bg-red-50 p-2 text-red-700">
           <p>
             This export belongs to @{parsed.ownerUsername}, but you're logged in as @
@@ -275,11 +355,13 @@ function Review({
           class="rounded bg-indigo-600 px-3 py-1.5 text-white disabled:opacity-40"
           onClick={onCommit}
         >
-          {viewer?.username
-            ? `Import into @${viewer.username}`
-            : viewer
-              ? 'Import into your account'
-              : 'Import'}
+          {whose === 'friend'
+            ? `Import @${friend || '…'}'s connections`
+            : viewer?.username
+              ? `Import into @${viewer.username}`
+              : viewer
+                ? 'Import into your account'
+                : 'Import'}
         </button>
         <button
           type="button"

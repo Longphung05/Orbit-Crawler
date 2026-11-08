@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { QueryRouter, QueryService } from '../../src/query';
+import { QueryRouter, QueryService, StatusTracker } from '../../src/query';
 import { freshDb } from '../db/helpers';
 
 const IG_SENDER = { tabId: 4, url: 'https://www.instagram.com/fake_alex/', fromSelf: true };
@@ -10,7 +10,12 @@ function setup(viewerForTab: (t: number) => string | undefined = () => '1000') {
   const paths = vi.spyOn(service, 'paths').mockResolvedValue({ status: 'error' });
   const invalidate = vi.spyOn(service, 'invalidate');
   const refreshTabs = vi.fn();
-  const router = new QueryRouter({ service, viewerForTab, refreshTabs });
+  const router = new QueryRouter({
+    service,
+    status: new StatusTracker(),
+    viewerForTab,
+    refreshTabs,
+  });
   return { router, profile, paths, invalidate, refreshTabs };
 }
 

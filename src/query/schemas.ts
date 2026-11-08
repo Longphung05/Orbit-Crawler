@@ -21,6 +21,9 @@ export const QueryRequestSchema = z.discriminatedUnion('type', [
 ]);
 export type QueryRequest = z.infer<typeof QueryRequestSchema>;
 
+/** Extension page (popup, side panel) → background: what is the badge showing right now? */
+export const StatusRequestSchema = z.object({ type: z.literal('orbit/status') });
+
 /** Extension page (side panel) → background: the graph was rewritten (import, wipe, restore). */
 export const GraphChangedSchema = z.object({ type: z.literal('orbit/graph-changed') });
 
@@ -61,6 +64,8 @@ export const ProfileViewSchema = z.discriminatedUnion('status', [
     /** Has Orbit stored this account at all? */
     known: z.boolean(),
     knownAccounts: z.number().int().nonnegative(),
+    /** How much of *your own* following list Orbit has (an export import completes it). */
+    firstLayer: z.enum(['none', 'partial', 'complete']),
     /** When the graph was last confirmed by anything you browsed or imported. */
     updatedAt: z.number().nullable(),
     showAvatarImages: z.boolean(),
@@ -90,3 +95,19 @@ export const PathsViewSchema = z.discriminatedUnion('status', [
   z.object({ status: z.literal('error') }),
 ]);
 export type PathsView = z.infer<typeof PathsViewSchema>;
+
+/** What the popup and side panel show as "the profile you're looking at". */
+export const StatusViewSchema = z.object({
+  status: z.literal('ok'),
+  viewing: z
+    .object({
+      viewerId: z.string(),
+      username: z.string(),
+      at: z.number(),
+      /** The background is still working out the answer. */
+      calculating: z.boolean(),
+      view: ProfileViewSchema.optional(),
+    })
+    .optional(),
+});
+export type StatusView = z.infer<typeof StatusViewSchema>;

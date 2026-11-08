@@ -33,6 +33,18 @@ export async function recordOutcome(
   });
 }
 
+/** The page-text "Followed by" fallback worked once more (§6.2). */
+export async function recordDomMutuals(db: OrbitDB, at: number): Promise<void> {
+  await db.transaction('rw', db.diagnostics, async () => {
+    const prev = await db.diagnostics.get('dom_mutuals');
+    const base =
+      prev && prev.adapterVersion === ADAPTER_VERSION
+        ? prev
+        : { key: 'dom_mutuals', adapterVersion: ADAPTER_VERSION, ok: 0, failed: 0 };
+    await db.diagnostics.put({ ...base, ok: base.ok + 1, lastOkAt: at });
+  });
+}
+
 export async function recordViewerDetection(
   db: OrbitDB,
   strategy: string,
@@ -56,7 +68,7 @@ export function isFailing(r: DiagnosticRecord): boolean {
 
 export function computeHealth(records: readonly DiagnosticRecord[]): Health {
   const payloads = records.filter(
-    (r) => r.key !== 'viewer' && r.adapterVersion === ADAPTER_VERSION,
+    (r) => r.key !== 'viewer' && r.key !== 'dom_mutuals' && r.adapterVersion === ADAPTER_VERSION,
   );
   if (payloads.length === 0) return 'unknown';
   const failing = payloads.filter(isFailing).length;

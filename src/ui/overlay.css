@@ -176,6 +176,13 @@
   color: var(--muted);
   font-size: 12px;
 }
+.orbit-tip {
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--link) 10%, transparent);
+  font-size: 12px;
+}
 .orbit-foot {
   margin: 12px 0 0;
   padding-top: 8px;

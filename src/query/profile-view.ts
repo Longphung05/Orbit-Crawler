@@ -71,8 +71,11 @@ export function buildProfileView(
   username: string,
   target: UserNode | undefined,
 ): ProfileViewOk {
+  const viewerIdx = ctx.reach.graph.indexOf(ctx.viewerId);
+  const followingCode = viewerIdx === undefined ? 0 : ctx.reach.graph.followingCov[viewerIdx];
   const base = {
     status: 'ok' as const,
+    firstLayer: (['none', 'partial', 'complete'] as const)[followingCode ?? 0] ?? 'none',
     username,
     knownAccounts: ctx.reach.graph.nodeCount,
     updatedAt: ctx.updatedAt,

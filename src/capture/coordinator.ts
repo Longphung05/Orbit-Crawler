@@ -2,9 +2,10 @@
 // interpret with the adapter, apply to the DB, and record adapter health. One queue, in order.
 import { interpretResponse, isInstagramUrl, type AdapterOutcome } from '../adapters/instagram';
 import { ViewerStore, UsernameSchema, type OrbitDB } from '../db';
-import { recordOutcome, recordViewerDetection } from './diagnostics';
+import { describeEvents, recordActivity } from './activity';
+import { recordDomMutuals, recordOutcome, recordViewerDetection } from './diagnostics';
 import { RuntimeMessageSchema, type RuntimeMessage } from './messages';
-import { applyEvents, type ApplySummary } from './pipeline';
+import { applyDomMutuals, applyEvents, type ApplySummary } from './pipeline';
 import { ListSessions } from './sessions';
 
 export interface SenderInfo {
@@ -15,6 +16,7 @@ export interface SenderInfo {
 }
 
 type ResponseMessage = Extract<RuntimeMessage, { type: 'orbit/response' }>;
+type DomMutualsMessage = Extract<RuntimeMessage, { type: 'orbit/dom-mutuals' }>;
 
 /** Responses that arrive before the tab's account is known wait this long, at most this many. */
 const PENDING_MAX = 100;
@@ -23,7 +25,10 @@ const PENDING_TTL_MS = 60_000;
 export interface ProcessedResult {
   viewerId: string;
   tabId: number;
-  outcome: AdapterOutcome;
+  /** The stored graph may have changed: cached answers are stale and badges should re-ask. */
+  changed: boolean;
+  /** Present for network responses (absent for the page-text fallback). */
+  outcome?: AdapterOutcome;
   summary?: ApplySummary;
 }
 
@@ -59,6 +64,7 @@ export class CaptureCoordinator {
     const msg = parsed.data;
     return this.enqueue(async () => {
       if (msg.type === 'orbit/viewer') await this.onViewer(tabId, msg);
+      else if (msg.type === 'orbit/dom-mutuals') await this.onDomMutuals(tabId, msg);
       else await this.onResponse(tabId, msg);
     });
   }
@@ -112,19 +118,53 @@ export class CaptureCoordinator {
     await this.process(viewerId, tabId, msg);
   }
 
+  /** The header's "Followed by …" line, read from the page (§6.2 DOM fallback). */
+  private async onDomMutuals(tabId: number, msg: DomMutualsMessage): Promise<void> {
+    if (!this.tabViewer.has(tabId) && msg.viewerId) this.tabViewer.set(tabId, msg.viewerId);
+    const viewerId = this.tabViewer.get(tabId);
+    if (!viewerId) return; // account unknown: the page is re-scanned, so don't buffer
+    const store = new ViewerStore(this.db, viewerId);
+    const meta = await this.db.viewers.get(viewerId);
+    if (meta?.username && meta.username.toLowerCase() === msg.profile.toLowerCase()) return;
+
+    const known = await store.findByUsername(msg.profile);
+    const profileId =
+      known?.id ??
+      (await store.resolveUsernames([msg.profile], msg.at)).get(msg.profile.toLowerCase());
+    if (!profileId || profileId === viewerId) return;
+
+    const summary = await applyDomMutuals(
+      { store, at: msg.at, tabId, sessions: this.sessions },
+      profileId,
+      msg.usernames,
+      msg.others,
+    );
+    await recordDomMutuals(this.db, msg.at);
+    const more = msg.others ? ` and ${msg.others} others` : '';
+    await recordActivity(this.db, viewerId, msg.at, [
+      {
+        kind: 'dom',
+        text: `Read the "Followed by" line on @${msg.profile}'s profile — ${msg.usernames.length} named${more}`,
+      },
+    ]);
+    this.onProcessed?.({ viewerId, tabId, changed: true, summary });
+  }
+
   private async process(viewerId: string, tabId: number, msg: ResponseMessage): Promise<void> {
     const outcome = interpretResponse({ url: msg.url, status: msg.status, text: msg.text });
     await recordOutcome(this.db, outcome, msg.at);
     if (outcome.status !== 'ok') {
-      this.onProcessed?.({ viewerId, tabId, outcome });
+      this.onProcessed?.({ viewerId, tabId, changed: false, outcome });
       return;
     }
+    const store = new ViewerStore(this.db, viewerId);
     const summary = await applyEvents(outcome.events, {
-      store: new ViewerStore(this.db, viewerId),
+      store,
       at: msg.at,
       tabId,
       sessions: this.sessions,
     });
-    this.onProcessed?.({ viewerId, tabId, outcome, summary });
+    await recordActivity(this.db, viewerId, msg.at, await describeEvents(outcome.events, store));
+    this.onProcessed?.({ viewerId, tabId, changed: true, outcome, summary });
   }
 }

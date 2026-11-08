@@ -12,6 +12,7 @@ const LABELS: Record<string, string> = {
   web_profile_info: 'Profiles (classic)',
   graphql_profile: 'Profiles (GraphQL)',
   friendship_status: 'Follow status',
+  dom_mutuals: 'Followed-by line on profiles',
 };
 
 function ago(ms: number | undefined): string {

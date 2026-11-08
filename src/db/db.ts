@@ -15,7 +15,7 @@ interface NodeV1 {
   followersCoverage?: UserNode['followersCoverage'];
 }
 
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 /**
  * Schema history. Never edit a shipped version: add a new one with an upgrade().
@@ -36,6 +36,22 @@ export const SCHEMA_V2 = {
 export const SCHEMA_V3 = {
   diagnostics: 'key',
 } as const;
+
+/** v4: a local, human-readable log of what each capture taught Orbit (per viewer). */
+export const SCHEMA_V4 = {
+  activity: '++id, viewerId, [viewerId+at]',
+} as const;
+
+export type ActivityKind = 'profile' | 'list' | 'status' | 'missing' | 'dom' | 'import';
+
+/** One line of the activity log. Contains usernames, so it is never part of "Copy diagnostics". */
+export interface ActivityRecord {
+  id?: number;
+  viewerId: string;
+  at: number;
+  kind: ActivityKind;
+  text: string;
+}
 
 /**
  * Per payload type (or 'viewer', or 'unmatched:<endpoint>') capture health. Contains endpoint
@@ -66,6 +82,7 @@ export class OrbitDB extends Dexie {
   viewers!: Table<ViewerMeta, string>;
   settings!: Table<SettingsRecord, string>;
   diagnostics!: Table<DiagnosticRecord, string>;
+  activity!: Table<ActivityRecord, number>;
 
   constructor(name = 'orbit') {
     super(name);
@@ -91,6 +108,7 @@ export class OrbitDB extends Dexie {
           });
       });
     this.version(3).stores(SCHEMA_V3);
+    this.version(4).stores(SCHEMA_V4);
   }
 }
 

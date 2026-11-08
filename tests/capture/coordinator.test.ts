@@ -134,7 +134,7 @@ describe('CaptureCoordinator → badge refresh hooks', () => {
   it('tells the callback which account and tab each capture belonged to', async () => {
     const seen: { viewerId: string; tabId: number; status: string }[] = [];
     const c = new CaptureCoordinator(freshDb(), (r) =>
-      seen.push({ viewerId: r.viewerId, tabId: r.tabId, status: r.outcome.status }),
+      seen.push({ viewerId: r.viewerId, tabId: r.tabId, status: r.outcome?.status ?? 'dom' }),
     );
     await c.handle(viewerMsg(P.VIEWER), IG_TAB);
     await c.handle(responseMsg(P.followingPage1), IG_TAB);

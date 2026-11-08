@@ -1,4 +1,13 @@
-export { OrbitDB, getDb, SCHEMA_VERSION, type DiagnosticRecord, type SettingsRecord } from './db';
+export {
+  OrbitDB,
+  getDb,
+  SCHEMA_VERSION,
+  type ActivityKind,
+  type ActivityRecord,
+  type DiagnosticRecord,
+  type SettingsRecord,
+} from './db';
+export { resetAllData } from './reset';
 export {
   ViewerStore,
   edgeId,

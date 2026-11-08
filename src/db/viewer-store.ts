@@ -93,6 +93,11 @@ export interface ExportSnapshotInput {
   partial?: ('following' | 'followers')[];
   /** When Instagram generated the export; the cutoff for stale marking. */
   exportedAt: number;
+  /**
+   * Whose export this is. Omitted: the viewer's own. Otherwise a friend's username: the lists
+   * become that friend's outgoing/incoming edges (a full branch of the graph, no scrolling).
+   */
+  ownerUsername?: string;
 }
 
 export class ViewerStore {
@@ -435,16 +440,30 @@ export class ViewerStore {
       'rw',
       [this.db.nodes, this.db.edges, this.db.viewers],
       async (): Promise<ExportSnapshotResult> => {
-        const ids = await this.resolveUsernames([...following, ...followers], exportedAt);
+        const meta = await this.db.viewers.get(v);
+        const selfKey = meta?.username ? meta.username.toLowerCase() : undefined;
+        const friendKey = input.ownerUsername?.toLowerCase();
+        if (friendKey !== undefined && friendKey === selfKey) {
+          throw new Error('ownerUsername is the viewer; import it as your own export');
+        }
+        // The viewer's own name in a friend's lists is the viewer, never a placeholder.
+        const names = [
+          ...following,
+          ...followers,
+          ...(input.ownerUsername ? [input.ownerUsername] : []),
+        ].filter((u) => u.toLowerCase() !== selfKey);
+        const ids = await this.resolveUsernames(names, exportedAt);
+        if (selfKey) ids.set(selfKey, v);
         const idOf = (u: string): string => {
           const id = ids.get(u.toLowerCase());
           if (id === undefined) throw new Error(`unresolved username: ${u}`);
           return id;
         };
+        const owner = input.ownerUsername ? idOf(input.ownerUsername) : v;
         const added = await this.upsertEdges(
           [
-            ...following.map((u) => ({ from: v, to: idOf(u), source: 'export' as const })),
-            ...followers.map((u) => ({ from: idOf(u), to: v, source: 'export' as const })),
+            ...following.map((u) => ({ from: owner, to: idOf(u), source: 'export' as const })),
+            ...followers.map((u) => ({ from: idOf(u), to: owner, source: 'export' as const })),
           ],
           exportedAt,
         );
@@ -456,20 +475,22 @@ export class ViewerStore {
         ].filter((d) => !partial.has(d));
         for (const direction of completeLists) {
           const res = await this.completeList({
-            ownerId: v,
+            ownerId: owner,
             direction,
             sessionStartedAt: exportedAt,
             completedAt: now,
           });
           markedStale += res.markedStale;
         }
-        const meta = await this.db.viewers.get(v);
-        await this.db.viewers.put({
-          username: '',
-          ...meta,
-          viewerId: v,
-          importedExportAt: maxOpt(meta?.importedExportAt, exportedAt),
-        });
+        if (owner === v) {
+          const after = await this.db.viewers.get(v);
+          await this.db.viewers.put({
+            username: '',
+            ...after,
+            viewerId: v,
+            importedExportAt: maxOpt(after?.importedExportAt, exportedAt),
+          });
+        }
         const placeholders = [...ids.values()].filter((id) => id.startsWith(PLACEHOLDER_PREFIX));
         return { added, markedStale, placeholders: new Set(placeholders).size };
       },
@@ -572,7 +593,7 @@ export class ViewerStore {
     const sessionStartedAt = TimestampSchema.parse(input.sessionStartedAt);
     const completedAt = TimestampSchema.parse(input.completedAt);
     const { ownerId } = input;
-    return this.db.transaction('rw', this.db.nodes, this.db.edges, async () => {
+    return this.db.transaction('rw', this.db.nodes, this.db.edges, this.db.viewers, async () => {
       const owner = await this.getNode(ownerId);
       if (direction === 'followers' && owner?.followersCapped) {
         return { completed: false, markedStale: 0 };
@@ -598,6 +619,19 @@ export class ViewerStore {
             ? { ...owner, followingCoverage: 'complete', followingCompleteAt: completedAt }
             : { ...owner, followersCoverage: 'complete', followersCompleteAt: completedAt };
         await this.db.nodes.put(next);
+      }
+      if (ownerId === this.viewerId && direction !== 'mutuals') {
+        // The viewer's own list. Record it on the viewer too: after an export import there may
+        // be no node for the viewer yet, and without this the graph would never know the list
+        // was complete (every badge would stay "or closer").
+        const meta = await this.db.viewers.get(ownerId);
+        const field = direction === 'following' ? 'followingCoverage' : 'followersCoverage';
+        await this.db.viewers.put({
+          username: '',
+          ...meta,
+          viewerId: ownerId,
+          [field]: 'complete',
+        });
       }
       return { completed: true, markedStale: toStale.length };
     });

@@ -2,7 +2,10 @@ import { liveQuery } from 'dexie';
 import { useEffect, useState } from 'preact/hooks';
 import { getDb } from '../db/db';
 import type { DiagnosticRecord } from '../db/db';
+import { StatusViewSchema, type StatusView } from '../query/schemas';
 import type { ViewerMeta } from '../shared/types';
+
+const STATUS_POLL_MS = 1500;
 
 /** Subscribe to a Dexie query; re-runs when the tables it reads change (in any extension page). */
 export function useLive<T>(query: () => Promise<T>, deps: readonly unknown[]): T | undefined {
@@ -45,4 +48,28 @@ export function useViewerCounts(viewerId: string | undefined): Counts | undefine
 /** Adapter diagnostics records (global, not per viewer). */
 export function useDiagnostics(): DiagnosticRecord[] | undefined {
   return useLive(() => getDb().diagnostics.toArray(), []);
+}
+
+/** What the badge is showing right now, polled from the background (local messages only). */
+export function useStatus(): StatusView | undefined {
+  const [status, setStatus] = useState<StatusView | undefined>(undefined);
+  useEffect(() => {
+    let live = true;
+    const ask = (): void => {
+      browser.runtime
+        .sendMessage({ type: 'orbit/status' })
+        .then((reply: unknown) => {
+          const parsed = StatusViewSchema.safeParse(reply);
+          if (live && parsed.success) setStatus(parsed.data);
+        })
+        .catch(() => undefined);
+    };
+    ask();
+    const timer = setInterval(ask, STATUS_POLL_MS);
+    return () => {
+      live = false;
+      clearInterval(timer);
+    };
+  }, []);
+  return status;
 }

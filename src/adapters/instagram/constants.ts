@@ -1,5 +1,5 @@
 // Bump ADAPTER_VERSION whenever any matcher or schema changes; diagnostics are keyed by it.
-export const ADAPTER_VERSION = '2026.11.0';
+export const ADAPTER_VERSION = '2026.11.1';
 
 /** window.postMessage tag between Orbit's page observer and content script. */
 export const ORBIT_CHANNEL = 'orbit-capture-v1';

@@ -4,10 +4,13 @@ import { isInstagramUrl } from '../adapters/instagram';
 import {
   GraphChangedSchema,
   QueryRequestSchema,
+  StatusRequestSchema,
   type PathsView,
   type ProfileView,
+  type StatusView,
 } from './schemas';
 import type { QueryService } from './service';
+import type { StatusTracker } from './status';
 
 export interface QuerySender {
   tabId?: number;
@@ -18,6 +21,8 @@ export interface QuerySender {
 
 export interface RouterDeps {
   service: QueryService;
+  status: StatusTracker;
+  now?: () => number;
   /** The account detected in a tab by the capture coordinator, if any. */
   viewerForTab: (tabId: number) => string | undefined;
   /** Tell instagram.com tabs (all of them, or those of one account) to ask again. */
@@ -31,7 +36,10 @@ export class QueryRouter {
    * Handle one runtime message. Returns a promise of the reply for badge queries, and undefined
    * for anything else (so the caller leaves the channel alone).
    */
-  handle(raw: unknown, sender: QuerySender): Promise<ProfileView | PathsView> | undefined {
+  handle(
+    raw: unknown,
+    sender: QuerySender,
+  ): Promise<ProfileView | PathsView | StatusView> | undefined {
     if (!sender.fromSelf) return undefined;
 
     const changed = GraphChangedSchema.safeParse(raw);
@@ -39,9 +47,15 @@ export class QueryRouter {
       // Only extension pages (no tab) may say the graph was rewritten.
       if (sender.tabId === undefined) {
         this.deps.service.invalidate();
+        this.deps.status.clear();
         this.deps.refreshTabs();
       }
       return undefined;
+    }
+
+    // The popup / side panel asking what the badge is doing. Extension pages only (no tab).
+    if (StatusRequestSchema.safeParse(raw).success) {
+      return sender.tabId === undefined ? Promise.resolve(this.deps.status.snapshot()) : undefined;
     }
 
     // Badge queries come from instagram.com content scripts only.
@@ -51,8 +65,16 @@ export class QueryRouter {
 
     const viewerId = this.deps.viewerForTab(sender.tabId) ?? req.data.viewerId;
     if (!viewerId) return Promise.resolve({ status: 'no_viewer' });
-    return req.data.type === 'orbit/profile'
-      ? this.deps.service.profile(viewerId, req.data.username)
-      : this.deps.service.paths(viewerId, req.data.username);
+    if (req.data.type === 'orbit/paths')
+      return this.deps.service.paths(viewerId, req.data.username);
+
+    const { tabId } = sender;
+    const { username } = req.data;
+    const now = this.deps.now ?? Date.now;
+    this.deps.status.begin(tabId, viewerId, username, now());
+    return this.deps.service.profile(viewerId, username).then((view) => {
+      this.deps.status.finish(tabId, viewerId, username, view, now());
+      return view;
+    });
   }
 }

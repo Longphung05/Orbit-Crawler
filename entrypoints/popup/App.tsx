@@ -1,4 +1,6 @@
-import { HealthDot, viewerLine } from '../../src/ui/health';
+import { GuideCard } from '../../src/ui/GuideCard';
+import { HealthDot } from '../../src/ui/health';
+import { ResetButton } from '../../src/ui/ResetButton';
 import { useActiveViewer, useDiagnostics, useViewerCounts } from '../../src/ui/hooks';
 
 async function openSidePanel(): Promise<void> {
@@ -27,7 +29,7 @@ export function App() {
           <dd class="text-lg font-semibold">{counts?.edges.toLocaleString() ?? '…'}</dd>
         </div>
       </dl>
-      <p class="text-xs text-slate-500">{viewerLine(viewer)}</p>
+      <GuideCard viewer={viewer} />
       <button
         type="button"
         class="w-full rounded bg-indigo-600 px-3 py-2 font-medium text-white hover:bg-indigo-700"
@@ -35,6 +37,7 @@ export function App() {
       >
         Open explorer
       </button>
+      <ResetButton />
     </main>
   );
 }

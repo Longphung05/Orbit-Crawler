@@ -5,6 +5,7 @@ import type { PathsView, Person, ProfileViewOk } from '../query/schemas';
 import {
   badgeModel,
   freshnessLine,
+  guidance,
   headline,
   hueFor,
   initials,
@@ -129,11 +130,17 @@ function PathGroups({ paths }: { paths: Extract<PathsView, { status: 'ok' }> }) 
   );
 }
 
-function Popover({ view, loadPaths, now }: Pick<OverlayProps, 'view' | 'loadPaths' | 'now'>) {
+function Popover({
+  view,
+  mode,
+  loadPaths,
+  now,
+}: Pick<OverlayProps, 'view' | 'loadPaths' | 'now'> & { mode: 'paths' | 'tips' }) {
   const [paths, setPaths] = useState<PathsView | undefined>(undefined);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (mode !== 'paths') return;
     let live = true;
     loadPaths()
       .then((p) => live && setPaths(p))
@@ -141,7 +148,7 @@ function Popover({ view, loadPaths, now }: Pick<OverlayProps, 'view' | 'loadPath
     return () => {
       live = false;
     };
-  }, [loadPaths]);
+  }, [loadPaths, mode]);
 
   // Keep the popover on screen when the badge sits near the right edge.
   useEffect(() => {
@@ -156,11 +163,16 @@ function Popover({ view, loadPaths, now }: Pick<OverlayProps, 'view' | 'loadPath
   return (
     <div class="orbit-pop" role="dialog" aria-label="How you connect" ref={ref}>
       <h2>{headline(view)}</h2>
-      {paths === undefined && <p class="orbit-muted orbit-wait">Loading…</p>}
-      {paths?.status === 'ok' && <PathGroups paths={paths} />}
-      {paths && paths.status !== 'ok' && (
+      {mode === 'paths' && paths === undefined && <p class="orbit-muted orbit-wait">Loading…</p>}
+      {mode === 'paths' && paths?.status === 'ok' && <PathGroups paths={paths} />}
+      {mode === 'paths' && paths && paths.status !== 'ok' && (
         <p class="orbit-muted orbit-wait">Couldn't load the paths. Try again in a moment.</p>
       )}
+      {guidance(view).map((t) => (
+        <p key={t} class="orbit-tip">
+          {t}
+        </p>
+      ))}
       {notes(view).map((n) => (
         <p key={n} class="orbit-note">
           {n}
@@ -201,11 +213,11 @@ export function Overlay({ view, placement, theme, loadPaths, now }: OverlayProps
       <button
         type="button"
         class={`orbit-badge orbit-tone-${model.tone}`}
-        data-clickable={model.hasPaths}
+        data-clickable={model.popover !== null}
         title={model.title}
-        aria-haspopup={model.hasPaths ? 'dialog' : undefined}
-        aria-expanded={model.hasPaths ? open : undefined}
-        onClick={() => model.hasPaths && setOpen((o) => !o)}
+        aria-haspopup={model.popover ? 'dialog' : undefined}
+        aria-expanded={model.popover ? open : undefined}
+        onClick={() => model.popover && setOpen((o) => !o)}
       >
         {view.connectors.length > 0 && (
           <span class="orbit-stack">
@@ -216,7 +228,9 @@ export function Overlay({ view, placement, theme, loadPaths, now }: OverlayProps
         )}
         <span>{model.label}</span>
       </button>
-      {open && model.hasPaths && <Popover view={view} loadPaths={loadPaths} now={now} />}
+      {open && model.popover && (
+        <Popover view={view} mode={model.popover} loadPaths={loadPaths} now={now} />
+      )}
     </div>
   );
 }

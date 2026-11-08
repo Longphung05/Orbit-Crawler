@@ -4,12 +4,14 @@ import {
   badgeModel,
   BOUND_TOOLTIP,
   freshnessLine,
+  guidance,
   headline,
   hueFor,
   initials,
   notes,
   profileUrl,
   relativeTime,
+  THIRD_DEGREE_TIP,
   UPPER_BOUND_MARK,
   viaText,
 } from '../../src/ui/badge-model';
@@ -28,6 +30,7 @@ function view(over: Partial<ProfileViewOk> = {}): ProfileViewOk {
     unavailable: false,
     known: true,
     knownAccounts: 1204,
+    firstLayer: 'complete',
     updatedAt: null,
     showAvatarImages: false,
     ...over,
@@ -42,7 +45,10 @@ describe('badgeModel', () => {
     expect(badgeModel(view({ state: 'third', degree: 3, connectorCount: 2 })).label).toBe(
       '3rd · via 2',
     );
-    expect(badgeModel(view({ state: 'out_of_orbit', degree: null })).label).toBe('Out of orbit');
+    expect(badgeModel(view({ state: 'out_of_orbit', degree: null })).label).toBe('3rd+ ?');
+    expect(
+      badgeModel(view({ state: 'out_of_orbit', degree: null, firstLayer: 'partial' })).label,
+    ).toBe('Unknown');
   });
 
   it('marks lower-bound counts with + and upper-bound degrees with the bound mark (§5.2)', () => {
@@ -57,11 +63,12 @@ describe('badgeModel', () => {
     expect(m.title).not.toBe(BOUND_TOOLTIP);
   });
 
-  it('only 2nd/3rd open the paths list', () => {
-    expect(badgeModel(view()).hasPaths).toBe(true);
-    expect(badgeModel(view({ state: 'third', degree: 3 })).hasPaths).toBe(true);
-    for (const state of ['self', 'first', 'out_of_orbit'] as const) {
-      expect(badgeModel(view({ state })).hasPaths).toBe(false);
+  it('2nd/3rd open the paths list, out of orbit opens tips, you/1st open nothing', () => {
+    expect(badgeModel(view()).popover).toBe('paths');
+    expect(badgeModel(view({ state: 'third', degree: 3 })).popover).toBe('paths');
+    expect(badgeModel(view({ state: 'out_of_orbit' })).popover).toBe('tips');
+    for (const state of ['self', 'first'] as const) {
+      expect(badgeModel(view({ state })).popover).toBeNull();
     }
   });
 
@@ -151,5 +158,41 @@ describe('identity helpers', () => {
       expect(h).toBeGreaterThanOrEqual(0);
       expect(h).toBeLessThan(360);
     }
+  });
+});
+
+describe('guidance', () => {
+  it('nothing to add for you or accounts you follow', () => {
+    expect(guidance(view({ state: 'self' }))).toEqual([]);
+    expect(guidance(view({ state: 'first' }))).toEqual([]);
+  });
+
+  it('out of orbit says what is missing and what to do, never that Orbit will do it', () => {
+    const tips = guidance(view({ state: 'out_of_orbit', degree: null }));
+    expect(tips).toHaveLength(2);
+    expect(tips[0]).toContain('Followed by');
+    expect(tips[1]).toBe(THIRD_DEGREE_TIP);
+    for (const t of tips) expect(t).not.toMatch(/automatic/i);
+  });
+
+  it('no 3rd-degree followers tip for a private account (its followers list is hidden)', () => {
+    const tips = guidance(view({ state: 'out_of_orbit', degree: null, isPrivate: true }));
+    expect(tips).not.toContain(THIRD_DEGREE_TIP);
+  });
+
+  it('asks for an import first when your own following list is not complete', () => {
+    const tips = guidance(view({ state: 'out_of_orbit', degree: null, firstLayer: 'none' }));
+    expect(tips).toHaveLength(3);
+    expect(tips[0]).toContain('Import your Instagram export');
+  });
+
+  it('2nd degree with a lower-bound count points at the Followed by list; exact says nothing', () => {
+    expect(guidance(view({ connectorsExact: false }))[0]).toContain('exact count');
+    expect(guidance(view())).toEqual([]);
+  });
+
+  it('out of orbit titles distinguish unseen from unconnected', () => {
+    expect(headline(view({ state: 'out_of_orbit', known: false }))).toContain("hasn't seen");
+    expect(headline(view({ state: 'out_of_orbit', known: true }))).toBe('No connection known yet');
   });
 });

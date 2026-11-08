@@ -21,6 +21,13 @@ export {
   type ObservedResponse,
 } from './interpret';
 export {
+  findFollowedByLine,
+  FOLLOWED_BY_SELECTOR,
+  parseFollowedByLine,
+  type DomMutuals,
+  type LineElement,
+} from './dom-mutuals';
+export {
   findUsernameAnchor,
   profileUsernameFromPath,
   USERNAME_ANCHOR_SELECTORS,

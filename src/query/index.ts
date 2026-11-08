@@ -1,4 +1,5 @@
 export { QueryService } from './service';
+export { StatusTracker } from './status';
 export { QueryRouter, type QuerySender, type RouterDeps } from './router';
 export {
   buildPathsView,
@@ -15,10 +16,13 @@ export {
   ProfileViewSchema,
   QueryRequestSchema,
   RefreshSchema,
+  StatusRequestSchema,
+  StatusViewSchema,
   type BadgeState,
   type PathsView,
   type Person,
   type ProfileView,
   type ProfileViewOk,
   type QueryRequest,
+  type StatusView,
 } from './schemas';

@@ -80,3 +80,34 @@ the person you follow. Hover for what the numbers mean.
 - Avatars are initials by default. Profile pictures would be requests to Instagram's CDN that the
   page didn't make, so they're off (`showAvatarImages` setting, no UI for it until Phase 7).
 - After you open a profile, Instagram's data arrives a moment later; the badge updates itself then.
+
+### How the answer is worked out
+
+Orbit never asks Instagram anything. It learns from two things only:
+
+1. **Your export** (side panel → Import). This gives it everyone you follow in one go, so you do
+   **not** need to scroll your own lists. (Without an export, scroll your own Following list to the
+   end once.)
+2. **Pages you open yourself.** On any profile, Instagram shows "Followed by a, b and N others":
+   people **you follow** who follow that profile. Each named person is a connection, so the profile
+   is **2nd degree**. Orbit reads that line (and the data Instagram loads for it). You do **not**
+   need to scroll their followers. If the badge says `via 2+`, click "Followed by … and N others"
+   and scroll that list to the end to get the exact count.
+
+3. **Exports friends share with you** (side panel → Import → "A friend's"). A friend's own
+   `following.json` gives Orbit everything *they* follow, a whole branch of the graph with no
+   scrolling. This is how 3rd-degree links appear without hours of list-scrolling. Only import an
+   export the friend chose to give you.
+
+To check one profile for a 3rd-degree link, open its Followers list and scroll a little: any
+follower Orbit already knows as 2nd degree makes it 3rd.
+
+`3rd+ ?` / `Unknown` (formerly "Out of orbit") means "Orbit has no connection data yet", not "no
+connection exists". Click the badge for what to do. The popup and side panel say what Orbit has detected and what to do next, and the
+side panel's **Activity** list shows every capture in plain words, so the live counters are
+explainable: each line is something Instagram's own page loaded because you opened it.
+
+### Reset
+
+Popup or side panel → **Reset all data** (asks once) erases every account, connection, setting and
+log Orbit has stored, for all accounts. It keeps only which Instagram account is logged in.

@@ -2,6 +2,7 @@ import { CaptureCoordinator } from '../src/capture/coordinator';
 import { getDb } from '../src/db/db';
 import { QueryRouter } from '../src/query/router';
 import { QueryService } from '../src/query/service';
+import { StatusTracker } from '../src/query/status';
 
 /** After a capture lands, wait for the burst of responses to settle before telling tabs. */
 const REFRESH_DEBOUNCE_MS = 400;
@@ -12,6 +13,7 @@ const REFRESH_DEBOUNCE_MS = 400;
 export default defineBackground(() => {
   const db = getDb();
   const service = new QueryService(db);
+  const status = new StatusTracker();
   const refreshTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
   /** Tell instagram.com tabs to re-ask (a plain message to our own content script). */
@@ -21,8 +23,8 @@ export default defineBackground(() => {
     }
   };
 
-  const coordinator: CaptureCoordinator = new CaptureCoordinator(db, ({ viewerId, outcome }) => {
-    if (outcome.status !== 'ok') return;
+  const coordinator: CaptureCoordinator = new CaptureCoordinator(db, ({ viewerId, changed }) => {
+    if (!changed) return;
     service.invalidate(viewerId);
     clearTimeout(refreshTimers.get(viewerId));
     refreshTimers.set(
@@ -36,6 +38,7 @@ export default defineBackground(() => {
 
   const router = new QueryRouter({
     service,
+    status,
     viewerForTab: (tabId) => coordinator.viewerForTab(tabId),
     refreshTabs,
   });
@@ -55,5 +58,8 @@ export default defineBackground(() => {
     return undefined; // no reply
   });
 
-  browser.tabs.onRemoved.addListener((tabId) => coordinator.forgetTab(tabId));
+  browser.tabs.onRemoved.addListener((tabId) => {
+    coordinator.forgetTab(tabId);
+    status.forgetTab(tabId);
+  });
 });
