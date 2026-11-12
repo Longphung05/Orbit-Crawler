@@ -3,11 +3,7 @@
 // to <body> and positions it over the username with absolute coordinates, so Instagram's own
 // elements are never changed, moved, hidden or reflowed. Missing anchor → a floating corner pill.
 import { render } from 'preact';
-import {
-  findUsernameAnchor,
-  OWN_PROFILE_BADGE_GAP_PX,
-  profileUsernameFromPath,
-} from '../adapters/instagram';
+import { findUsernameAnchor, profileUsernameFromPath, usernameRowEnd } from '../adapters/instagram';
 import {
   ProfileViewSchema,
   PathsViewSchema,
@@ -141,10 +137,10 @@ export function createOverlay(deps: OverlayDeps): OverlayController {
         host.style.display = 'none'; // give Instagram a moment to render its header
         return;
       }
-      // On your own profile a settings gear sits right after your name: clear it.
-      const gap = view.state === 'self' ? OWN_PROFILE_BADGE_GAP_PX : 8;
+      // Sit after the icons next to the name (verified tick, "⋯", your settings gear).
+      const end = rect && anchor ? usernameRowEnd(anchor, rect) : (rect?.right ?? 0);
       host.style.cssText = rect
-        ? `position:absolute;left:${Math.round(rect.right + window.scrollX + gap)}px;top:${Math.round(rect.top + window.scrollY + rect.height / 2)}px;transform:translateY(-50%);z-index:${Z_INDEX}`
+        ? `position:absolute;left:${Math.round(end + window.scrollX + 8)}px;top:${Math.round(rect.top + window.scrollY + rect.height / 2)}px;transform:translateY(-50%);z-index:${Z_INDEX}`
         : `position:fixed;right:16px;bottom:16px;z-index:${Z_INDEX}`;
       if (next !== placement) {
         placement = next;

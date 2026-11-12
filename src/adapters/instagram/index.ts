@@ -30,10 +30,13 @@ export {
 export {
   findUsernameAnchor,
   isOwnProfilePage,
-  OWN_PROFILE_BADGE_GAP_PX,
   OWN_PROFILE_SELECTOR,
   profileUsernameFromPath,
   USERNAME_ANCHOR_SELECTORS,
+  USERNAME_ROW_ITEM_SELECTOR,
+  usernameRowEnd,
+  type Box,
+  type RowElement,
 } from './profile-page';
 export { detectViewer, type ViewerDetection } from './viewer';
 export { skeleton, type Skeleton } from './skeleton';

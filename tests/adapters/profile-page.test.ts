@@ -3,6 +3,9 @@ import {
   findUsernameAnchor,
   profileUsernameFromPath,
   USERNAME_ANCHOR_SELECTORS,
+  usernameRowEnd,
+  type Box,
+  type RowElement,
 } from '../../src/adapters/instagram';
 
 describe('profileUsernameFromPath', () => {
@@ -75,5 +78,51 @@ describe('findUsernameAnchor', () => {
 
   it('only ever queries inside the header', () => {
     for (const s of USERNAME_ANCHOR_SELECTORS) expect(s.startsWith('header ')).toBe(true);
+  });
+});
+
+describe('usernameRowEnd', () => {
+  type Fake = RowElement & { kids: Fake[] };
+  const box = (left: number, width: number, top = 10, height = 20): Box => ({
+    left,
+    right: left + width,
+    top,
+    bottom: top + height,
+    width,
+    height,
+  });
+  const el = (b: Box, kids: Fake[] = []): Fake => {
+    const node: Fake = {
+      parentElement: null,
+      kids,
+      getBoundingClientRect: () => b,
+      // Every descendant counts as an icon/button for this fake.
+      querySelectorAll: () => {
+        const all: Fake[] = [];
+        const walk = (n: Fake): void => n.kids.forEach((k) => (all.push(k), walk(k)));
+        walk(node);
+        return all;
+      },
+    };
+    for (const k of kids) k.parentElement = node;
+    return node;
+  };
+  const name = box(0, 100);
+
+  it('clears the icons right after the name (gear, verified tick, ⋯)', () => {
+    const anchor = el(name);
+    const tick = el(box(104, 16, 12, 16));
+    const dots = el(box(128, 24, 8, 24));
+    el(box(0, 400, 4, 32), [anchor, tick, dots]);
+    expect(usernameRowEnd(anchor, name)).toBe(152);
+  });
+
+  it('ignores other lines, things far along the row, and the whole header', () => {
+    const anchor = el(name);
+    const below = el(box(110, 80, 60, 30)); // the button row under the name
+    const far = el(box(300, 24)); // not next to the name
+    const row = el(box(0, 400, 4, 32), [anchor, below, far]);
+    el(box(0, 600, 0, 300), [row, el(box(104, 24))]); // header-level: too tall, never searched
+    expect(usernameRowEnd(anchor, name)).toBe(100);
   });
 });

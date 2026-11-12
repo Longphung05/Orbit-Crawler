@@ -64,3 +64,15 @@ describe('complete "Followed by" list', () => {
     expect(either.confidence('T').connectorsExact).toBe(false);
   });
 });
+
+describe('direction (the @vhgmanh followers-list case)', () => {
+  it('someone who follows a 2nd-degree account is not 3rd; someone they follow is', () => {
+    // You follow B; B follows H (H is 2nd). F follows H (from H's followers list); H follows G.
+    const g = graph('V>B B>H F>H H>G');
+    const r = computeReach(g, 'V');
+    expect(r.degree('G')).toBe(3);
+    expect(r.degree('F')).toBeUndefined();
+    // "Any relationship counts" mode treats F → H as a link too.
+    expect(computeReach(g, 'V', { undirected: true }).degree('F')).toBe(3);
+  });
+});

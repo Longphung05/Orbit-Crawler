@@ -89,10 +89,58 @@ export function isOwnProfilePage(root: { querySelector(selector: string): unknow
 }
 
 /**
- * Gap between your name and the "You" badge on your own profile, where Instagram puts a settings
- * gear (~24px icon plus spacing) right after the username. Other profiles use the normal gap.
+ * Things Instagram puts on the username's line right after it: the verified tick, the "⋯" options
+ * button, the settings gear on your own profile. The badge goes after them, never over them.
  */
-export const OWN_PROFILE_BADGE_GAP_PX = 48;
+export const USERNAME_ROW_ITEM_SELECTOR = 'svg, button, a, img, [role="button"]';
+/** Items further than this past the previous one aren't "next to the name" (e.g. a far column). */
+const ROW_MAX_GAP_PX = 24;
+/** How far up from the username element to look for its line. */
+const ROW_MAX_DEPTH = 5;
+
+export interface Box {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+  width: number;
+  height: number;
+}
+
+export interface RowElement {
+  parentElement: RowElement | null;
+  getBoundingClientRect(): Box;
+  querySelectorAll(selector: string): ArrayLike<RowElement>;
+}
+
+/**
+ * Right edge (viewport px) of the cluster of icons/buttons on the username's line, starting at
+ * the name itself (`name`, its text box). Only reads layout; never touches the page.
+ */
+export function usernameRowEnd(anchor: RowElement, name: Box): number {
+  const items: Box[] = [];
+  let node = anchor.parentElement;
+  for (let depth = 0; node && depth < ROW_MAX_DEPTH; depth++, node = node.parentElement) {
+    // Taller than a line or two: this is the whole header, not the username's row.
+    if (node.getBoundingClientRect().height > Math.max(name.height, 16) * 3) break;
+    const found = node.querySelectorAll(USERNAME_ROW_ITEM_SELECTOR);
+    for (let i = 0; i < found.length; i++) {
+      const b = found[i]?.getBoundingClientRect();
+      if (!b || b.width === 0 || b.height === 0) continue;
+      const mid = (b.top + b.bottom) / 2;
+      if (mid < name.top || mid > name.bottom) continue; // a different line
+      if (b.left < name.right - 1) continue; // the name itself, or something before it
+      items.push(b);
+    }
+  }
+  items.sort((a, b) => a.left - b.left);
+  let right = name.right;
+  for (const b of items) {
+    if (b.left - right > ROW_MAX_GAP_PX) break;
+    right = Math.max(right, b.right);
+  }
+  return right;
+}
 
 interface TextElement {
   textContent: string | null;

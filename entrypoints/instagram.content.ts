@@ -5,6 +5,7 @@ import {
   CONTENT_MATCHES,
   detectViewer,
   findFollowedByLine,
+  findUsernameAnchor,
   isOwnProfilePage,
   ORBIT_CHANNEL,
   profileUsernameFromPath,
@@ -53,6 +54,8 @@ export default defineContentScript({
       try {
         const name = profileUsernameFromPath(window.location.pathname);
         if (!viewerId || !name || !isOwnProfilePage(document)) return;
+        // Mid-navigation the old header can still be on screen: it must show this URL's name.
+        if (!findUsernameAnchor(document, name)) return;
         const key = `${viewerId}|${name.toLowerCase()}`;
         if (key === reportedOwn) return;
         reportedOwn = key;
