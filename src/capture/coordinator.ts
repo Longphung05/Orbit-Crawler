@@ -1,11 +1,27 @@
 // Background-side capture orchestration: validate messages, attribute them to the right viewer,
 // interpret with the adapter, apply to the DB, and record adapter health. One queue, in order.
-import { interpretResponse, isInstagramUrl, type AdapterOutcome } from '../adapters/instagram';
+import {
+  interpretResponse,
+  isInstagramUrl,
+  profileUsernameFromPath,
+  type AdapterOutcome,
+} from '../adapters/instagram';
 import { ViewerStore, UsernameSchema, type OrbitDB } from '../db';
 import { describeEvents, recordActivity } from './activity';
-import { recordDomMutuals, recordOutcome, recordViewerDetection } from './diagnostics';
+import {
+  recordDomMutuals,
+  recordOutcome,
+  recordViewerAlias,
+  recordViewerDetection,
+} from './diagnostics';
 import { RuntimeMessageSchema, type RuntimeMessage } from './messages';
-import { applyDomMutuals, applyEvents, type ApplySummary } from './pipeline';
+import {
+  applyDomMutuals,
+  applyEvents,
+  nameListOwners,
+  remapSelfIds,
+  type ApplySummary,
+} from './pipeline';
 import { ListSessions } from './sessions';
 
 export interface SenderInfo {
@@ -85,7 +101,10 @@ export class CaptureCoordinator {
     tabId: number,
     msg: Extract<RuntimeMessage, { type: 'orbit/viewer' }>,
   ): Promise<void> {
-    await recordViewerDetection(this.db, msg.strategy, msg.viewerId !== null, msg.at);
+    // The own-profile signal names your @username; it says nothing about how the id was found.
+    if (msg.strategy !== 'own-profile-page') {
+      await recordViewerDetection(this.db, msg.strategy, msg.viewerId !== null, msg.at);
+    }
     if (msg.viewerId === null) {
       // Logged out (or detection drifted): no capture at all (§9 Viewer).
       this.forgetTab(tabId);
@@ -95,7 +114,25 @@ export class CaptureCoordinator {
     if (previous && previous !== msg.viewerId) this.sessions.forgetTab(tabId); // account switch
     this.tabViewer.set(tabId, msg.viewerId);
     const username = UsernameSchema.safeParse(msg.username).success ? msg.username : undefined;
-    await new ViewerStore(this.db, msg.viewerId).touchViewer(username, msg.at);
+    const store = new ViewerStore(this.db, msg.viewerId);
+    const before = (await this.db.viewers.get(msg.viewerId))?.username ?? '';
+    await store.touchViewer(username, msg.at);
+    let changed = false;
+    if (username && username.toLowerCase() !== before.toLowerCase()) {
+      await recordActivity(this.db, msg.viewerId, msg.at, [
+        { kind: 'profile', text: `Your profile detected as @${username}` },
+      ]);
+      changed = true;
+    }
+    if (username) {
+      // Your profile may already be stored under the id Instagram's profile data uses.
+      const node = await store.findByUsername(username);
+      if (node && !node.isPlaceholder && (await store.adoptSelfId(node.id, msg.at))) {
+        await recordViewerAlias(this.db, msg.at);
+        changed = true;
+      }
+    }
+    if (changed) this.onProcessed?.({ viewerId: msg.viewerId, tabId, changed: true });
 
     const waiting = this.pending.get(tabId) ?? [];
     this.pending.delete(tabId);
@@ -158,13 +195,17 @@ export class CaptureCoordinator {
       return;
     }
     const store = new ViewerStore(this.db, viewerId);
-    const summary = await applyEvents(outcome.events, {
+    const events = remapSelfIds(outcome.events, await store.selfIds(), viewerId);
+    const pageName = msg.pagePath ? profileUsernameFromPath(msg.pagePath) : undefined;
+    if (pageName) await nameListOwners(store, events, pageName, msg.at);
+    const summary = await applyEvents(events, {
       store,
       at: msg.at,
       tabId,
       sessions: this.sessions,
     });
-    await recordActivity(this.db, viewerId, msg.at, await describeEvents(outcome.events, store));
+    if (summary.selfMerged) await recordViewerAlias(this.db, msg.at);
+    await recordActivity(this.db, viewerId, msg.at, await describeEvents(events, store));
     this.onProcessed?.({ viewerId, tabId, changed: true, outcome, summary });
   }
 }

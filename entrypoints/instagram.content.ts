@@ -5,6 +5,7 @@ import {
   CONTENT_MATCHES,
   detectViewer,
   findFollowedByLine,
+  isOwnProfilePage,
   ORBIT_CHANNEL,
   profileUsernameFromPath,
 } from '../src/adapters/instagram';
@@ -45,6 +46,28 @@ export default defineContentScript({
       now: Date.now,
     });
 
+    // Your own profile shows an "Edit profile" link: that names your @username even when the id
+    // in the page config doesn't match your profile's id. The header renders late, so re-check.
+    let reportedOwn: string | undefined;
+    const checkOwnProfile = (): void => {
+      try {
+        const name = profileUsernameFromPath(window.location.pathname);
+        if (!viewerId || !name || !isOwnProfilePage(document)) return;
+        const key = `${viewerId}|${name.toLowerCase()}`;
+        if (key === reportedOwn) return;
+        reportedOwn = key;
+        toBackground({
+          type: 'orbit/viewer',
+          viewerId,
+          username: name,
+          strategy: 'own-profile-page',
+          at: Date.now(),
+        });
+      } catch {
+        // never throw into the page
+      }
+    };
+
     const detect = (): void => {
       try {
         const scripts = Array.from(document.scripts, (s) => s.textContent ?? '');
@@ -52,6 +75,9 @@ export default defineContentScript({
         viewerId = d.viewerId;
         overlay.sync();
         scanner.schedule();
+        checkOwnProfile();
+        ctx.setTimeout(checkOwnProfile, 1500);
+        ctx.setTimeout(checkOwnProfile, 4000);
         if (d.viewerId === reported && d.viewerId !== null) return;
         reported = d.viewerId;
         const msg: RuntimeMessage = {
@@ -82,6 +108,7 @@ export default defineContentScript({
           text: m.text,
           at: Date.now(),
           viewerId,
+          pagePath: window.location.pathname.slice(0, 512),
         });
       }
     };

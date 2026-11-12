@@ -8,6 +8,7 @@ export {
   DEFAULT_REACH_OPTIONS,
   type Confidence,
   type Degree,
+  type LongerPathsResult,
   type PathOptions,
   type PathsResult,
   type Reach,

@@ -23,6 +23,7 @@ export function toGraphNode(n: UserNode): GraphNodeInfo {
   };
   if (n.followerCount !== undefined) info.followerCount = n.followerCount;
   if (n.unavailable) info.unavailable = true;
+  if (n.mutualsCompleteAt !== undefined) info.mutualsComplete = true;
   return info;
 }
 

@@ -171,6 +171,21 @@
   color: var(--muted);
   font-size: 12px;
 }
+.orbit-further {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.orbit-pop:has(> h2 + .orbit-further) .orbit-further {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+.orbit-further h3 {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
 .orbit-note {
   margin: 8px 0 0;
   color: var(--muted);

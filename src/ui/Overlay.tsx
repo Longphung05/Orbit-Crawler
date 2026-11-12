@@ -1,10 +1,11 @@
 // The profile badge and its paths popover (§8.1, §8.2). Rendered inside a Shadow DOM by the
 // content script. Display only: it asks the background for data and renders what comes back.
 import { useEffect, useRef, useState } from 'preact/hooks';
-import type { PathsView, Person, ProfileViewOk } from '../query/schemas';
+import type { PathGroup, PathsView, Person, ProfileViewOk } from '../query/schemas';
 import {
   badgeModel,
   freshnessLine,
+  furtherHeading,
   guidance,
   headline,
   hueFor,
@@ -72,9 +73,15 @@ function PathRow({ path }: { path: Person[] }) {
   );
 }
 
-function PathGroups({ paths }: { paths: Extract<PathsView, { status: 'ok' }> }) {
+interface PathSet {
+  groups: PathGroup[];
+  total: number;
+  truncated: boolean;
+}
+
+function PathGroups({ paths, openFirst }: { paths: PathSet; openFirst: boolean }) {
   const [open, setOpen] = useState<ReadonlySet<string>>(
-    () => new Set(paths.groups[0] ? [paths.groups[0].connector.id] : []),
+    () => new Set(openFirst && paths.groups[0] ? [paths.groups[0].connector.id] : []),
   );
   const toggle = (id: string): void =>
     setOpen((prev) => {
@@ -164,7 +171,17 @@ function Popover({
     <div class="orbit-pop" role="dialog" aria-label="How you connect" ref={ref}>
       <h2>{headline(view)}</h2>
       {mode === 'paths' && paths === undefined && <p class="orbit-muted orbit-wait">Loading…</p>}
-      {mode === 'paths' && paths?.status === 'ok' && <PathGroups paths={paths} />}
+      {mode === 'paths' && paths?.status === 'ok' && (
+        <>
+          {view.state !== 'first' && <PathGroups paths={paths} openFirst />}
+          {paths.further.groups.length > 0 && (
+            <section class="orbit-further">
+              <h3>{furtherHeading(view, paths.further.connectorCount)}</h3>
+              <PathGroups paths={paths.further} openFirst={view.state === 'first'} />
+            </section>
+          )}
+        </>
+      )}
       {mode === 'paths' && paths && paths.status !== 'ok' && (
         <p class="orbit-muted orbit-wait">Couldn't load the paths. Try again in a moment.</p>
       )}

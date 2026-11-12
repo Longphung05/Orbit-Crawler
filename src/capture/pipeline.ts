@@ -18,6 +18,8 @@ export interface ApplySummary {
   completed: number;
   /** Edges marked stale in this batch. */
   staled: number;
+  /** Your profile turned up under another id and was merged into your account. */
+  selfMerged?: boolean;
 }
 
 async function applyFriendship(
@@ -90,6 +92,56 @@ export async function applyDomMutuals(
   return sum;
 }
 
+/** Rewrite ids that are the viewer under another id (ViewerMeta.selfIds) to `viewerId`. */
+export function remapSelfIds(
+  events: readonly CaptureEvent[],
+  aliases: ReadonlySet<string>,
+  viewerId: string,
+): CaptureEvent[] {
+  if (aliases.size === 0) return [...events];
+  const id = (x: string): string => (aliases.has(x) ? viewerId : x);
+  const obs = <T extends { id: string }>(o: T): T =>
+    aliases.has(o.id) ? { ...o, id: viewerId } : o;
+  return events.map((e): CaptureEvent => {
+    switch (e.kind) {
+      case 'profile': {
+        const out: CaptureEvent = { ...e, user: obs(e.user) };
+        if (e.mutuals) out.mutuals = { ...e.mutuals, users: e.mutuals.users.map(obs) };
+        return out;
+      }
+      case 'friendship':
+        return { ...e, userId: id(e.userId) };
+      case 'list_page':
+        return { ...e, ownerId: id(e.ownerId), rows: e.rows.map(obs) };
+      case 'profile_missing':
+        return e;
+    }
+  });
+}
+
+/**
+ * A list payload names its owner only by numeric id. When the page you had open is that owner's
+ * profile (`/name/following/`, `/name/followers/mutualOnly`, ...), tie the id to `pageName`, which
+ * merges any placeholder known only by username (an imported export, a "Followed by" line).
+ * Skipped when the id is already a named account, or the name already belongs to another id.
+ */
+export async function nameListOwners(
+  store: ViewerStore,
+  events: readonly CaptureEvent[],
+  pageName: string,
+  at: number,
+): Promise<void> {
+  const key = pageName.toLowerCase();
+  for (const e of events) {
+    if (e.kind !== 'list_page' || e.ownerId === store.viewerId) continue;
+    const owner = await store.getNode(e.ownerId);
+    if (owner && !owner.isPlaceholder) continue;
+    const holder = await store.findByUsername(pageName);
+    if (holder && !holder.isPlaceholder && holder.usernameKey === key) continue;
+    await store.upsertNodes([{ id: e.ownerId, username: pageName }], at);
+  }
+}
+
 export async function applyEvents(
   events: readonly CaptureEvent[],
   ctx: ApplyContext,
@@ -106,6 +158,12 @@ export async function applyEvents(
         if (e.user.id === v) {
           await store.touchViewer(e.user.username, at);
           break; // relationship flags on your own profile are meaningless
+        }
+        const ownName = (await store.db.viewers.get(v))?.username;
+        if (ownName && ownName.toLowerCase() === e.user.username.toLowerCase()) {
+          // Your own profile, under a different id than the page config named: merge them.
+          if (await store.adoptSelfId(e.user.id, at)) sum.selfMerged = true;
+          break;
         }
         if (e.friendship) await applyFriendship(ctx, e.user.id, e.friendship, sum);
         if (e.mutuals) await applyMutualHint(ctx, e.user.id, e.mutuals, sum);

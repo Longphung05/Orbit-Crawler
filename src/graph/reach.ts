@@ -55,6 +55,11 @@ export interface PathsResult {
   truncated: boolean;
 }
 
+export interface LongerPathsResult extends PathsResult {
+  /** Distinct people you follow who start a listed-or-counted longer route. */
+  connectorCount: number;
+}
+
 const EMPTY: readonly string[] = Object.freeze([]);
 
 export class ReachResult {
@@ -183,7 +188,7 @@ export class ReachResult {
     // Every 1st-degree account's relationship to `target` is known: either the target's inbound
     // list is complete, or the 1st-degree layer itself is complete and each member is checked.
     const allL1Known = (target: number): boolean => {
-      if (this.fullyKnownInbound(target)) return true;
+      if (this.fullyKnownInbound(target) || this.mutualsKnown(target)) return true;
       if (!layer1Complete) return false;
       for (const a of this.layer1) if (!this.relKnown(a, target)) return false;
       return true;
@@ -245,6 +250,80 @@ export class ReachResult {
     };
     walk(x, d);
 
+    return { paths: this.rank(raw, opts).slice(0, limit), total, truncated };
+  }
+
+  /**
+   * Longer routes to a 1st- or 2nd-degree account, beyond its shortest paths (up to `maxDepth`
+   * hops). Layered: each step goes one ring further out (you → 1st → 2nd → target), so no route
+   * repeats a shortest path or loops back through people you already follow. For a 2nd-degree
+   * account these are its 3rd-degree routes: friends of friends who follow them.
+   */
+  getLongerPaths(targetId: string, opts: PathOptions = {}): LongerPathsResult {
+    const limit = opts.limit ?? 50;
+    const { raw, truncated } = this.enumerateLonger(targetId, opts.maxEnumerate ?? 10_000);
+    return {
+      paths: this.rank(raw, opts).slice(0, limit),
+      total: raw.length,
+      truncated,
+      connectorCount: new Set(raw.map((p) => p[1])).size,
+    };
+  }
+
+  /** Counts for `getLongerPaths`, without ranking (cheap enough for every badge refresh). */
+  longerPathStats(targetId: string, maxEnumerate = 10_000): Omit<LongerPathsResult, 'paths'> {
+    const { raw, truncated } = this.enumerateLonger(targetId, maxEnumerate);
+    return { total: raw.length, truncated, connectorCount: new Set(raw.map((p) => p[1])).size };
+  }
+
+  private enumerateLonger(
+    targetId: string,
+    maxEnumerate: number,
+  ): { raw: Int32Array[]; truncated: boolean } {
+    const raw: Int32Array[] = [];
+    const x = this.graph.indexOf(targetId);
+    if (targetId === this.viewerId || x === undefined) return { raw, truncated: false };
+    const d = this.degrees[x]!;
+    if (d < 1) return { raw, truncated: false };
+    let truncated = false;
+
+    for (let len = d + 1; len <= this.options.maxDepth; len++) {
+      const buf = new Int32Array(len + 1);
+      buf[0] = this.viewer;
+      buf[len] = x;
+      // Fill positions len-1 … 1, each with an account of exactly that degree.
+      const walk = (node: number, pos: number): void => {
+        if (pos === 0) {
+          raw.push(buf.slice());
+          return;
+        }
+        for (const p of this.layerPredIdx(node, pos, x)) {
+          if (raw.length >= maxEnumerate) {
+            truncated = true;
+            return;
+          }
+          buf[pos] = p;
+          walk(p, pos - 1);
+        }
+      };
+      walk(x, len - 1);
+    }
+    return { raw, truncated };
+  }
+
+  /** In-neighbours of `node` that are expandable accounts of exactly `degree` (never `exclude`). */
+  private layerPredIdx(node: number, degree: number, exclude: number): number[] {
+    const csr = this.reverseCsr();
+    const out: number[] = [];
+    for (let r = csr.start[node]!; r < csr.start[node + 1]!; r++) {
+      const u = csr.adj[r]!;
+      if (u !== exclude && this.degrees[u] === degree && this.expandable[u]) out.push(u);
+    }
+    return this.rankedIdx(Int32Array.from(out));
+  }
+
+  /** §7.2 ordering: shorter first, then interaction, smaller intermediaries, then names. */
+  private rank(raw: readonly Int32Array[], opts: PathOptions): string[][] {
     const score = opts.interactionScore;
     const keyed = raw.map((path) => {
       let interaction = 0;
@@ -265,6 +344,7 @@ export class ReachResult {
 
     keyed.sort(
       (a, b) =>
+        a.ids.length - b.ids.length ||
         b.interaction - a.interaction ||
         cmpNum(a.maxFollowers, b.maxFollowers) ||
         a.sumFollowers - b.sumFollowers ||
@@ -272,7 +352,7 @@ export class ReachResult {
         cmpStr(a.ids.join('\u0000'), b.ids.join('\u0000')),
     );
 
-    return { paths: keyed.slice(0, limit).map((k) => k.ids), total, truncated };
+    return keyed.map((k) => k.ids);
   }
 
   // ── Internals ─────────────────────────────────────────────────────────────
@@ -356,6 +436,16 @@ export class ReachResult {
     if (this.options.undirected)
       return g.followersCov[x] === COMPLETE && g.followingCov[x] === COMPLETE;
     return g.followersCov[x] === COMPLETE;
+  }
+
+  /**
+   * x's complete "Followed by" list names every account the viewer follows that follows x. That
+   * settles every 1st-degree relationship to x, unless 1st degree also counts your followers
+   * ('either', undirected), whom that list doesn't cover.
+   */
+  private mutualsKnown(x: number): boolean {
+    if (this.options.undirected || this.options.firstDegreeMode === 'either') return false;
+    return this.graph.mutualsComplete[x] === 1;
   }
 
   /** Do we know the full set of the viewer's 1st-degree accounts? */

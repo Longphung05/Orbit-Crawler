@@ -18,6 +18,8 @@ export interface GraphNodeInfo {
   unavailable?: boolean;
   followingCoverage?: Coverage;
   followersCoverage?: Coverage;
+  /** Every account the viewer follows that follows this one is known ("Followed by" list, scrolled to the end). */
+  mutualsComplete?: boolean;
 }
 
 export interface BuildOptions {
@@ -90,6 +92,7 @@ export class OrbitGraph {
     readonly unavailable: Uint8Array,
     readonly followingCov: Uint8Array,
     readonly followersCov: Uint8Array,
+    readonly mutualsComplete: Uint8Array,
   ) {}
 
   static build(
@@ -138,6 +141,7 @@ export class OrbitGraph {
     const unavailable = new Uint8Array(n);
     const followingCov = new Uint8Array(n);
     const followersCov = new Uint8Array(n);
+    const mutualsComplete = new Uint8Array(n);
     for (const info of infos) {
       const i = index.get(info.id)!;
       usernames[i] = info.username;
@@ -145,6 +149,7 @@ export class OrbitGraph {
       unavailable[i] = info.unavailable ? 1 : 0;
       followingCov[i] = COVERAGE_CODE[info.followingCoverage ?? 'none'];
       followersCov[i] = COVERAGE_CODE[info.followersCoverage ?? 'none'];
+      mutualsComplete[i] = info.mutualsComplete ? 1 : 0;
     }
 
     return new OrbitGraph(
@@ -157,6 +162,7 @@ export class OrbitGraph {
       unavailable,
       followingCov,
       followersCov,
+      mutualsComplete,
     );
   }
 

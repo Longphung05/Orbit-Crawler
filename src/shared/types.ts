@@ -43,6 +43,11 @@ export interface UserNode {
   followersCoverage: Coverage;
   followingCompleteAt?: number;
   followersCompleteAt?: number;
+  /**
+   * Its "Followed by" (mutual followers) list was scrolled to the end: every account you follow
+   * that follows it is known.
+   */
+  mutualsCompleteAt?: number;
   /** Hub follower list hit the storage cap (§7.4): it can never be marked complete. */
   followersCapped?: boolean;
 }
@@ -74,4 +79,9 @@ export interface ViewerMeta {
    */
   followingCoverage?: Coverage;
   followersCoverage?: Coverage;
+  /**
+   * Other ids that are this same account. Instagram's page config can name the logged-in account
+   * by a different id than its profile and list data use; captures under these ids count as you.
+   */
+  selfIds?: string[];
 }

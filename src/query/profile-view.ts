@@ -2,7 +2,7 @@
 // Pure: no Dexie, no browser APIs. The service loads the data; this decides what to show.
 import { groupPathsByConnector, type ReachResult } from '../graph';
 import { PLACEHOLDER_PREFIX, type UserNode } from '../shared/types';
-import type { BadgeState, PathsView, Person, ProfileViewOk } from './schemas';
+import type { BadgeState, PathGroup, PathsView, Person, ProfileViewOk } from './schemas';
 
 export interface ViewContext {
   reach: ReachResult;
@@ -85,6 +85,7 @@ export function buildProfileView(
     connectors: [] as Person[],
     hiddenHubCount: 0,
     connectorCount: 0,
+    furtherConnectorCount: 0,
   };
   const withNode = (v: ProfileViewOk): ProfileViewOk => {
     if (target?.isPrivate !== undefined) v.isPrivate = target.isPrivate;
@@ -126,16 +127,32 @@ export function buildProfileView(
     connectorCount: reach.connectorCount,
     connectors: reach.degree === 1 ? [] : pickAvatars(ctx, ctx.reach.connectors(target.id)),
     hiddenHubCount: ctx.reach.hiddenHubs(target.id).length,
+    furtherConnectorCount: ctx.reach.longerPathStats(target.id).connectorCount,
   });
 }
 
-export function buildPathsView(ctx: ViewContext, target: UserNode | undefined): PathsView {
-  if (!target) return { status: 'ok', groups: [], total: 0, truncated: false };
-  const result = ctx.reach.getPaths(target.id, { limit: MAX_LISTED_PATHS });
-  const groups = groupPathsByConnector(result.paths).map((g) => ({
+const toGroups = (ctx: ViewContext, paths: readonly string[][]): PathGroup[] =>
+  groupPathsByConnector(paths).map((g) => ({
     connector: toPerson(ctx, g.connector),
     // [viewer, a, ..., target] → drop nothing: the UI renders "You" for the first entry.
     paths: g.paths.map((p) => p.map((id) => toPerson(ctx, id))),
   }));
-  return { status: 'ok', groups, total: result.total, truncated: result.truncated };
+
+export function buildPathsView(ctx: ViewContext, target: UserNode | undefined): PathsView {
+  const none = { groups: [], total: 0, truncated: false, connectorCount: 0 };
+  if (!target) return { status: 'ok', groups: [], total: 0, truncated: false, further: none };
+  const result = ctx.reach.getPaths(target.id, { limit: MAX_LISTED_PATHS });
+  const longer = ctx.reach.getLongerPaths(target.id, { limit: MAX_LISTED_PATHS });
+  return {
+    status: 'ok',
+    groups: toGroups(ctx, result.paths),
+    total: result.total,
+    truncated: result.truncated,
+    further: {
+      groups: toGroups(ctx, longer.paths),
+      total: longer.total,
+      truncated: longer.truncated,
+      connectorCount: longer.connectorCount,
+    },
+  };
 }

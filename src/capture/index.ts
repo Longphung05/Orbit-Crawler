@@ -16,7 +16,7 @@ export {
   type PageMessage,
   type RuntimeMessage,
 } from './messages';
-export { applyDomMutuals, applyEvents, type ApplySummary } from './pipeline';
+export { applyDomMutuals, applyEvents, remapSelfIds, type ApplySummary } from './pipeline';
 export { ACTIVITY_KEEP, describeEvents, recordActivity, type ActivityItem } from './activity';
 export { ListSessions } from './sessions';
 export { watchRoute } from './route-watcher';

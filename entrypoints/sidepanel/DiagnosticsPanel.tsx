@@ -13,6 +13,7 @@ const LABELS: Record<string, string> = {
   graphql_profile: 'Profiles (GraphQL)',
   friendship_status: 'Follow status',
   dom_mutuals: 'Followed-by line on profiles',
+  viewer_alias: 'Your profile id merged into your account',
 };
 
 function ago(ms: number | undefined): string {

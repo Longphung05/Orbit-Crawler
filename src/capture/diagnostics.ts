@@ -45,6 +45,18 @@ export async function recordDomMutuals(db: OrbitDB, at: number): Promise<void> {
   });
 }
 
+/**
+ * Counts merges of your profile's id into the detected account id. Non-zero means the page
+ * config's id differs from your profile's: a hint for which detection pattern needs fixing.
+ */
+export async function recordViewerAlias(db: OrbitDB, at: number): Promise<void> {
+  await db.transaction('rw', db.diagnostics, async () => {
+    const prev = await db.diagnostics.get('viewer_alias');
+    const base = prev ?? { key: 'viewer_alias', adapterVersion: ADAPTER_VERSION, ok: 0, failed: 0 };
+    await db.diagnostics.put({ ...base, ok: base.ok + 1, lastOkAt: at });
+  });
+}
+
 export async function recordViewerDetection(
   db: OrbitDB,
   strategy: string,
@@ -68,7 +80,11 @@ export function isFailing(r: DiagnosticRecord): boolean {
 
 export function computeHealth(records: readonly DiagnosticRecord[]): Health {
   const payloads = records.filter(
-    (r) => r.key !== 'viewer' && r.key !== 'dom_mutuals' && r.adapterVersion === ADAPTER_VERSION,
+    (r) =>
+      r.key !== 'viewer' &&
+      r.key !== 'dom_mutuals' &&
+      r.key !== 'viewer_alias' &&
+      r.adapterVersion === ADAPTER_VERSION,
   );
   if (payloads.length === 0) return 'unknown';
   const failing = payloads.filter(isFailing).length;

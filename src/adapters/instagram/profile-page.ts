@@ -77,6 +77,23 @@ export const USERNAME_ANCHOR_SELECTORS = [
   'header span',
 ] as const;
 
+/**
+ * Only your own profile header carries an "Edit profile" link. Matched by href, which is not
+ * localised. Scoped to the header so the nav's Settings entry never counts.
+ */
+export const OWN_PROFILE_SELECTOR = 'header a[href^="/accounts/edit"]';
+
+/** Is the page currently showing the logged-in account's own profile? */
+export function isOwnProfilePage(root: { querySelector(selector: string): unknown }): boolean {
+  return root.querySelector(OWN_PROFILE_SELECTOR) !== null;
+}
+
+/**
+ * Gap between your name and the "You" badge on your own profile, where Instagram puts a settings
+ * gear (~24px icon plus spacing) right after the username. Other profiles use the normal gap.
+ */
+export const OWN_PROFILE_BADGE_GAP_PX = 48;
+
 interface TextElement {
   textContent: string | null;
 }

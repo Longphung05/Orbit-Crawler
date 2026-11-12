@@ -4,6 +4,7 @@ import {
   badgeModel,
   BOUND_TOOLTIP,
   freshnessLine,
+  furtherHeading,
   guidance,
   headline,
   hueFor,
@@ -33,9 +34,21 @@ function view(over: Partial<ProfileViewOk> = {}): ProfileViewOk {
     firstLayer: 'complete',
     updatedAt: null,
     showAvatarImages: false,
+    furtherConnectorCount: 0,
     ...over,
   };
 }
+
+describe('longer routes', () => {
+  it('makes a 1st-degree badge clickable only when there is more to show', () => {
+    expect(badgeModel(view({ state: 'first', degree: 1 })).popover).toBeNull();
+    const more = view({ state: 'first', degree: 1, furtherConnectorCount: 3 });
+    expect(badgeModel(more)).toMatchObject({ label: '1st', popover: 'paths' });
+    expect(headline(more)).toBe('You follow this account');
+    expect(furtherHeading(more, 3)).toBe('Also connected through 3 people you follow');
+    expect(furtherHeading(view(), 1)).toBe('3rd-degree connections · through 1 person you follow');
+  });
+});
 
 describe('badgeModel', () => {
   it('shows the §8.1 labels', () => {

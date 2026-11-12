@@ -70,6 +70,11 @@ export const ProfileViewSchema = z.discriminatedUnion('status', [
     updatedAt: z.number().nullable(),
     showAvatarImages: z.boolean(),
     person: PersonSchema.optional(),
+    /**
+     * Longer routes beyond the shortest ones (for 1st/2nd-degree accounts): e.g. a 2nd-degree
+     * account's 3rd-degree routes through friends of friends. Zero when there are none.
+     */
+    furtherConnectorCount: z.number().int().nonnegative().default(0),
   }),
   z.object({ status: z.literal('no_viewer') }),
   z.object({ status: z.literal('error') }),
@@ -77,19 +82,29 @@ export const ProfileViewSchema = z.discriminatedUnion('status', [
 export type ProfileView = z.infer<typeof ProfileViewSchema>;
 export type ProfileViewOk = Extract<ProfileView, { status: 'ok' }>;
 
+const PathGroupSchema = z.object({
+  connector: PersonSchema,
+  paths: z.array(z.array(PersonSchema).min(2).max(4)),
+});
+export type PathGroup = z.infer<typeof PathGroupSchema>;
+
 export const PathsViewSchema = z.discriminatedUnion('status', [
   z.object({
     status: z.literal('ok'),
     /** Paths grouped by the person you follow who starts them; each is you → … → target. */
-    groups: z.array(
-      z.object({
-        connector: PersonSchema,
-        paths: z.array(z.array(PersonSchema).min(2).max(4)),
-      }),
-    ),
+    groups: z.array(PathGroupSchema),
     /** Shortest paths that exist in what Orbit knows (may exceed what is listed). */
     total: z.number().nonnegative(),
     truncated: z.boolean(),
+    /** Longer routes (see ProfileView.furtherConnectorCount), grouped the same way. */
+    further: z
+      .object({
+        groups: z.array(PathGroupSchema),
+        total: z.number().nonnegative(),
+        truncated: z.boolean(),
+        connectorCount: z.number().int().nonnegative(),
+      })
+      .default({ groups: [], total: 0, truncated: false, connectorCount: 0 }),
   }),
   z.object({ status: z.literal('no_viewer') }),
   z.object({ status: z.literal('error') }),

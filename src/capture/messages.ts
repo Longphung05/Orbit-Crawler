@@ -30,6 +30,11 @@ export const RuntimeMessageSchema = z.discriminatedUnion('type', [
       .string()
       .regex(/^\d{1,25}$/)
       .nullable(),
+    /**
+     * The page's path when the response arrived (e.g. `/name/following/`). Names the owner of a
+     * list whose payload only carries a numeric id.
+     */
+    pagePath: z.string().max(512).optional(),
   }),
   /** The "Followed by a, b and N others" line read from a profile header (low confidence). */
   z.object({

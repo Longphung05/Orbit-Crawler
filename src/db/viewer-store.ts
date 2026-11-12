@@ -127,6 +127,48 @@ export class ViewerStore {
     });
   }
 
+  /** Ids known to be this same account besides `viewerId` (see ViewerMeta.selfIds). */
+  async selfIds(): Promise<ReadonlySet<string>> {
+    return new Set((await this.db.viewers.get(this.viewerId))?.selfIds ?? []);
+  }
+
+  /**
+   * `otherId` is the viewer under another id (their profile, opened and recognised as theirs).
+   * Fold its node and edges into the viewer's and remember the alias. Returns whether anything
+   * changed.
+   */
+  async adoptSelfId(otherId: string, at: number): Promise<boolean> {
+    TimestampSchema.parse(at);
+    const v = this.viewerId;
+    if (otherId === v || otherId.startsWith(PLACEHOLDER_PREFIX)) return false;
+    return this.db.transaction('rw', this.db.nodes, this.db.edges, this.db.viewers, async () => {
+      let changed = false;
+      const other = await this.db.nodes.get([v, otherId]);
+      if (other) {
+        const self = await this.db.nodes.get([v, v]);
+        const moved: UserNode = { ...other, id: v };
+        delete moved.unavailable;
+        delete moved.unavailableAt;
+        await this.db.nodes.put(self ? this.absorbPlaceholder(moved, self) : moved);
+        await this.rewriteEdges(otherId, v);
+        await this.db.nodes.delete([v, otherId]);
+        changed = true;
+      }
+      const meta = await this.db.viewers.get(v);
+      const known = meta?.selfIds ?? [];
+      if (!known.includes(otherId)) {
+        await this.db.viewers.put({
+          ...meta,
+          viewerId: v,
+          username: meta?.username ?? other?.username ?? '',
+          selfIds: [...known, otherId],
+        });
+        changed = true;
+      }
+      return changed;
+    });
+  }
+
   async getSettings(): Promise<OrbitSettings> {
     const rec = await this.db.settings.get(this.viewerId);
     const fields = Object.entries(rec ?? {}).filter(([k]) => k !== 'viewerId');
@@ -336,6 +378,7 @@ export class ViewerStore {
       followersCoverage: maxCoverage(node.followersCoverage, ph.followersCoverage),
       followingCompleteAt: maxOpt(node.followingCompleteAt, ph.followingCompleteAt),
       followersCompleteAt: maxOpt(node.followersCompleteAt, ph.followersCompleteAt),
+      mutualsCompleteAt: maxOpt(node.mutualsCompleteAt, ph.mutualsCompleteAt),
     };
   }
 
@@ -619,6 +662,9 @@ export class ViewerStore {
             ? { ...owner, followingCoverage: 'complete', followingCompleteAt: completedAt }
             : { ...owner, followersCoverage: 'complete', followersCompleteAt: completedAt };
         await this.db.nodes.put(next);
+      }
+      if (owner && direction === 'mutuals') {
+        await this.db.nodes.put({ ...owner, mutualsCompleteAt: completedAt });
       }
       if (ownerId === this.viewerId && direction !== 'mutuals') {
         // The viewer's own list. Record it on the viewer too: after an export import there may

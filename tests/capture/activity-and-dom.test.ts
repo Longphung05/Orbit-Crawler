@@ -86,10 +86,17 @@ describe('describeEvents', () => {
       "Read 1 rows of @fake_ann's followers list",
       "Read 2 search results in @fake_ann's following list",
       "Saw @fake_target's profile — you don't follow them; they follow you; Instagram named 2 people you follow who follow them",
-      'Saw your own profile',
+      'Saw your own profile (@fake_me)',
       'Follow status for @fake_ann',
       '@fake_gone looks unavailable',
     ]);
+  });
+
+  it('treats your known @username as you even when its id differs from the detected one', async () => {
+    const store = await seeded();
+    await store.touchViewer('fake_me', 1);
+    const [item] = await describeEvents([{ kind: 'profile', user: obs('77', 'Fake_Me') }], store);
+    expect(item?.text).toBe('Saw your own profile (@Fake_Me)');
   });
 
   it('says so when Instagram named no mutual followers', async () => {
@@ -99,6 +106,20 @@ describe('describeEvents', () => {
       store,
     );
     expect(item?.text).toContain('named no mutual followers');
+  });
+});
+
+describe('own profile detection', () => {
+  it('logs "Your profile detected as @…" once and makes your badge read You', async () => {
+    const db = freshDb();
+    const c = new CaptureCoordinator(db);
+    await c.handle(viewerMsg(), IG_TAB);
+    await c.handle({ ...viewerMsg('fake_me'), strategy: 'own-profile-page', at: 2 }, IG_TAB);
+    await c.handle({ ...viewerMsg('fake_me'), strategy: 'own-profile-page', at: 3 }, IG_TAB);
+    const lines = (await db.activity.toArray()).map((r) => r.text);
+    expect(lines.filter((t) => t === 'Your profile detected as @fake_me')).toHaveLength(1);
+    const view = await new QueryService(db).profile(V, 'fake_me');
+    expect(view.status === 'ok' && view.state).toBe('self');
   });
 });
 
@@ -127,10 +148,10 @@ describe('capture log through the coordinator', () => {
       { type: 'orbit/response', ...P.response(P.followingPage1), at: 3, viewerId: null },
       IG_TAB,
     );
-    const rows = await db.activity.where('viewerId').equals(V).toArray();
-    expect(rows).toHaveLength(1);
-    expect(rows[0]?.kind).toBe('list');
-    expect(rows[0]?.text).toMatch(/^Read \d+ rows of your following list/);
+    const rows = await db.activity.where('viewerId').equals(V).sortBy('at');
+    expect(rows.map((r) => r.kind)).toEqual(['profile', 'list']);
+    expect(rows[0]?.text).toBe('Your profile detected as @fake_me');
+    expect(rows[1]?.text).toMatch(/^Read \d+ rows of your following list/);
   });
 });
 
@@ -171,8 +192,8 @@ describe('page-text "Followed by" fallback', () => {
   it('is logged, counted in diagnostics, and does not distort adapter health', async () => {
     const { db, c } = await run();
     await c.handle(domMsg(), IG_TAB);
-    const row = await db.activity.where('viewerId').equals(V).first();
-    expect(row).toMatchObject({ kind: 'dom' });
+    const row = (await db.activity.toArray()).find((r) => r.kind === 'dom');
+    expect(row).toMatchObject({ kind: 'dom', viewerId: V });
     expect(row?.text).toContain('@fake_target');
     expect(row?.text).toContain('2 named and 3 others');
     expect(await db.diagnostics.get('dom_mutuals')).toMatchObject({ ok: 1, failed: 0 });

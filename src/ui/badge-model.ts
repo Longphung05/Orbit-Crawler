@@ -35,7 +35,15 @@ export function badgeModel(view: ProfileViewOk): BadgeModel {
     return { label: 'You', tone: 'self', title: 'This is your profile.', popover: null };
   }
   if (view.state === 'first') {
-    return { label: '1st', tone: 'first', title: 'You follow this account.', popover: null };
+    const more = view.furtherConnectorCount > 0;
+    return {
+      label: '1st',
+      tone: 'first',
+      title: more
+        ? 'You follow this account. Click to see who else connects you.'
+        : 'You follow this account.',
+      popover: more ? 'paths' : null,
+    };
   }
   if (view.state === 'out_of_orbit') {
     const base = view.known
@@ -76,6 +84,7 @@ export function headline(view: ProfileViewOk): string {
   if (view.state === 'out_of_orbit') {
     return view.known ? 'No connection known yet' : "Orbit hasn't seen this account yet";
   }
+  if (view.state === 'first') return 'You follow this account';
   const n = view.connectorCount;
   const plus = view.connectorsExact ? '' : '+';
   const people = `${n}${plus} ${n === 1 && view.connectorsExact ? 'person' : 'people'} you follow`;
@@ -96,6 +105,17 @@ export function relativeTime(then: number, now: number): string {
   if (ms < DAY) return plural(Math.floor(ms / HOUR), 'hour');
   if (ms < 60 * DAY) return plural(Math.floor(ms / DAY), 'day');
   return plural(Math.floor(ms / (30 * DAY)), 'month');
+}
+
+/**
+ * Heading for the longer-routes section. For a 1st-degree account: other people you follow who
+ * follow them (and their friends). For a 2nd-degree one: its 3rd-degree routes.
+ */
+export function furtherHeading(view: ProfileViewOk, connectorCount: number): string {
+  const people = `${connectorCount} ${connectorCount === 1 ? 'person' : 'people'} you follow`;
+  return view.state === 'first'
+    ? `Also connected through ${people}`
+    : `3rd-degree connections · through ${people}`;
 }
 
 /** "Last updated 3 days ago · based on 1,204 known accounts" (§8.2). */

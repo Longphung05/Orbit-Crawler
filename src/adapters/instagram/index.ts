@@ -29,6 +29,9 @@ export {
 } from './dom-mutuals';
 export {
   findUsernameAnchor,
+  isOwnProfilePage,
+  OWN_PROFILE_BADGE_GAP_PX,
+  OWN_PROFILE_SELECTOR,
   profileUsernameFromPath,
   USERNAME_ANCHOR_SELECTORS,
 } from './profile-page';

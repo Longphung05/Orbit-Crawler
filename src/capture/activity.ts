@@ -53,12 +53,13 @@ export async function describeEvents(
   const add = (kind: ActivityKind, text: string): void => {
     out.push({ kind, text });
   };
+  const ownName = (await store.db.viewers.get(store.viewerId))?.username.toLowerCase() || undefined;
 
   for (const e of events) {
     switch (e.kind) {
       case 'profile': {
-        if (e.user.id === store.viewerId) {
-          add('profile', 'Saw your own profile');
+        if (e.user.id === store.viewerId || e.user.username.toLowerCase() === ownName) {
+          add('profile', `Saw your own profile (@${e.user.username})`);
           break;
         }
         const parts: string[] = [];
